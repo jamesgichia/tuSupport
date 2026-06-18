@@ -21,3 +21,6 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+
+# Ignore .env file which contains sensitive information such as database credentials
+.env
