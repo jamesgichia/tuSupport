@@ -1,26 +1,55 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
-.vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+# ==========================================
+# Python & Django Core Setup
+# ==========================================
 
-# Ignore .env file which contains sensitive information such as database credentials
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python Bytecode & Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local Environment Secrets (must be in place before first commit)
 .env
+.env.local
+.env.*.local
+
+# Database (Postgres is used — this blocks accidental local SQLite fallback)
+*.sqlite3
+db.sqlite3
+
+# Django-specific generated files
+staticfiles/
+media/
+
+# ==========================================
+# Docker
+# ==========================================
+
+# Local override files often used for ad-hoc secrets/experiments
+docker-compose.override.yml
+
+# ==========================================
+# Node / Next.js
+# ==========================================
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log*
+
+# ==========================================
+# Editor / IDE (uncomment whichever applies to you)
+# ==========================================
+.vscode/
+.idea/
+*.swp
+
+# ==========================================
+# OS-level
+# ==========================================
+.DS_Store
