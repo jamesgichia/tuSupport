@@ -9,9 +9,11 @@ class Organization(models.Model):
 
 class TenantManager(models.Manager):
     def get_queryset(self):
-        # Tenant filtering logic goes here — placeholder for now.
-        # Real thread-local lookup gets wired when the middleware exists (Day 2/3).
-        return super().get_queryset()
+        raise NotImplementedError(
+            "TenantManager has no filtering logic yet (ADR-004). "
+            "Do not use TenantScopedModel subclasses until middleware "
+            "sets the current-organization context. See DECISIONS.md ADR-004."
+        )
 
 class TenantScopedModel(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
