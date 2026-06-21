@@ -1,38 +1,29 @@
 # tuSupport — Current Progress
 
-> Snapshot of where the project stands right now. Overwrite this each session — do not append. History of *how* we got here lives in `DECISIONS.md` (architectural) or your own git log (everything else).
+> Snapshot of where the project stands right now. Overwrite this each session — do not append.
 
 **Phase:** Foundation (Week 1 of 12)
-**Last updated:** Week 1, Day 1 — CLOSED
-**Active branch:** `feature/backend-foundation` (committed, not yet merged to `main`)
+**Last updated:** Week 1, Day 2 — in progress, stopped at a clean verified checkpoint
+**Active branch:** `feature/frontend-bootstrap`
 
 ## Stack status
 
-- **Backend:** Django 5.2 LTS + django-environ — bootstrapped, connected to Postgres, verified via `migrate`
-- **Database:** PostgreSQL 18, Docker Compose (`tusupport_postgres`), reachable at `localhost:5432`, app connects as `tusupport_admin`
-- **Frontend:** Next.js / TypeScript — not started (Day 2)
+- **Backend:** Django 5.2 LTS + django-environ, now living in `backend/` (moved from repo root). Connected to Postgres, verified via `migrate`. Unchanged functionally since Day 1 close.
+- **Database:** PostgreSQL 18, Docker Compose (`tusupport_postgres`), reachable at `localhost:5432`
+- **Frontend:** Next.js 16.2.9 + TypeScript + Tailwind + App Router, scaffolded into `frontend/`, restructured to use `src/` layout (scaffolder's "recommended defaults" skipped this — fixed manually before first commit). Dev server verified running (`npm run dev`, Turbopack, ready in ~500ms) and rendering correctly in browser.
 
-## Environment
+## Completed — Week 1, Day 2 (so far)
 
-- Kali Linux, Python 3.13, venv at `venv/` (gitignored)
-- DB credentials in git-ignored `.env`; rotated once this session after a brief exposure incident — current values are clean
-- `psycopg[binary]` installed as the Postgres driver (psycopg3, not psycopg2)
+- Repo restructured into monorepo layout: `backend/` and `frontend/` as siblings at repo root, `docs/` untouched at root. See ADR-005.
+- `docker-compose.yml` confirmed staying at repo root (must see both service folders to orchestrate them).
+- Next.js scaffolded via `create-next-app` (TypeScript, Tailwind, App Router, ESLint all confirmed present).
+- Manually corrected `src/` layout after scaffolder defaults skipped it — moved `app/` into `src/app/`, verified dev server still resolved it correctly post-move.
+- `npm audit`: 2 moderate vulnerabilities in transitive `postcss` dependency (via `next`). Reasoned, deliberate deferral — fix would downgrade `next` 7 major versions to a canary build; project doesn't process untrusted CSS input, so exposure is effectively nil. Revisit only if `npm audit` ever flags something with real exposure given how input is actually handled.
+- First real component created: `src/components/LandingHero.tsx`, rendered from `src/app/page.tsx` via the `@/*` import alias.
+- **Bug encountered and resolved:** `@/*` alias failed to resolve (`tsconfig.json`'s `paths` mapping still pointed at repo-root-relative paths from before the manual `src/` move, never updated). Fixed by changing `"@/*": ["./*"]` to `"@/*": ["./src/*"]`. Root cause understood: Next.js auto-detects `src/`, but TypeScript's path aliasing is explicit config, not auto-detected — moving folders doesn't update it for you.
 
-## Completed — Week 1, Day 1 (full closure)
+## In progress / next up — Week 1, Day 2 continued (or Day 3)
 
-- Dockerized PostgreSQL 18 set up, validated, reachable (carried from prior session)
-- `.gitignore` fully rebuilt — replaced a leftover Dynamics 365 AL-language template with one accurate to Python/Django/Next.js/Docker
-- Git workflow decided and adopted: GitHub Flow, `feature/<desc>` / `fix/<desc>` branches, `main` always deployable (ADR-003)
-- `feature/backend-foundation` branch created and used for all Day 1 work
-- Multi-tenancy enforcement mechanism decided: abstract base model + custom manager, thread-local context (ADR-004)
-- Django 5.2 LTS project bootstrapped (`tusupport`), flat structure at repo root
-- `SECRET_KEY` and `DATABASES` both wired through `django-environ`, reading from `.env` — no secrets hardcoded in tracked files
-- `core` app created: `Organization` model (concrete, migrated) + `TenantManager` / `TenantScopedModel` (abstract base, no filtering logic yet — placeholder pending middleware)
-- End-to-end connection verified: `python manage.py migrate` applied all built-in Django migrations + `core.0001_initial` successfully against real Postgres
-- Day 1 work committed on `feature/backend-foundation` (not yet merged to `main`)
-
-## In progress / next up — Week 1, Day 2
-
-- Merge `feature/backend-foundation` → `main` (deliberately left for next session to start with full context)
-- Day 2 = Frontend Client (per scope.md's weekly structure) — Next.js/TypeScript bootstrap
-- Known deferred gap: `TenantManager.get_queryset()` has no real filtering yet — needs middleware (likely Day 3, Integration Layer) to set the thread-local "current organization" before this becomes functional
+- Component architecture and state management proper (scope.md's stated Day 2 goals) — only the first single component exists so far; no shared layout, no navigation, no real page structure yet.
+- Commit just made: "Add LandingHero component, fix tsconfig path alias for src/ layout" — still on `feature/frontend-bootstrap`, not yet merged.
+- Standing reminder for Phase 3 (unchanged from Day 1): Celery org-context gap — pass `organization` explicitly as a task argument, fail loud if missing.

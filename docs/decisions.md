@@ -39,6 +39,17 @@
 **Reasoning:** Matches scope.md §10's "can it fail safely?" test better than convention-only, at a setup cost appropriate to the project's current stage. RLS remains the stronger long-term option and is not discarded, only sequenced later.
 
 
+## ADR-005: Monorepo structure — single repo with backend/ and frontend/ as siblings
+
+**Date:** Week 1, Day 2
+**Decision:** Keep backend (Django) and frontend (Next.js) in one git repository, as sibling folders (`backend/`, `frontend/`), rather than two independent repos.
+**Options considered:**
+
+- **Separate repos** (`tusupport-backend`, `tusupport-frontend`) — rejected for now. Solves a team-coordination problem (independent release cadences, separate CI/ownership) that doesn't exist for a solo developer. Would also complicate the single-VPS Docker Compose deployment target: one `docker-compose.yml` orchestrating both services is straightforward with sibling folders in one repo, awkward across repos (git submodules, or a third orchestration repo, or manual path coordination on the deploy server).
+- **Monorepo (chosen)** — matches the deployment model (one `docker-compose.yml` at the repo root, referencing `./backend` and `./frontend` as sibling build contexts) and keeps end-to-end feature tracing (UI → API call → DRF view → model) within one `git log`, one editor window — directly supports the project's learning goal of seeing system seams clearly.
+**Consequence:** Existing backend content (previously flat at repo root) was restructured into `backend/`, as a sub-step of the `feature/frontend-bootstrap` branch (per ADR-003's branch-granularity rule — this restructure only exists in service of adding the frontend, not as its own capability). `docker-compose.yml` stays at repo root, not inside either service folder, since it must "see" all sibling services to orchestrate them.
+**Tradeoff accepted:** Frontend and backend dependency installs, version history, and (later) CI runs are entangled in one repo. Not a real cost at solo-developer, pre-production scale; would need revisiting if the project ever had separate frontend/backend teams with independent release cadences.
+
 ## Environment notes (non-architectural, but worth remembering)
 
 - PostgreSQL 18+ Docker images require the data volume mounted at the parent directory `/var/lib/postgresql`, not the old-style `/var/lib/postgresql/data` — this supports version-namespaced data directories for future `pg_upgrade` operations.
