@@ -7,21 +7,35 @@ export default function EmailSignup() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+		e.preventDefault();
 
-    const looksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!looksValid) {
-      setError("Enter a valid email address.");
-      return;
-    }
+		const looksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+		if (!looksValid) {
+			setError("Enter a valid email address.");
+			return;
+		}
 
-    setError("");
-    setSubmitted(true);
-    // TODO: real submission goes here later — POST to a Django endpoint.
-    // Until that endpoint exists and re-validates server-side, treat this
-    // as a UI mockup, not a working signup.
-  }
+		setError("");
+
+		try {
+			const response = await fetch("http://localhost:8000/api/v1/leads/", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ email }),
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				setError(data.email?.[0] ?? "Something went wrong. Please try again.");
+				return;
+			}
+
+			setSubmitted(true);
+		} catch {
+			setError("Could not reach the server. Please try again.");
+		}
+	}
 
   if (submitted) {
     return <p>Thanks — we&apos;ll notify you when tuSupport launches.</p>;
