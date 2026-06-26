@@ -65,6 +65,18 @@
 **Tradeoff accepted:** This only stays safe if the review step is actually rigorous every time, not skipped when tired or rushed — an unreviewed AI-written endpoint is exactly the failure mode scope.md's "fail loud, not silent" principle exists to prevent. If review discipline slips, this model degrades into the rejected "pure vibe coding" option above. Also accepted: James's hand-implementation fluency (Django views, React syntax) will stay shallow relative to a traditional full-stack learner — a deliberate bet that this is the correct skill allocation given his stated 2026+ market read on AI and coding, not a guaranteed-correct one.
 
 
+## ADR-007: No CAPTCHA on `/api/v1/leads/` — rate limiting alone is sufficient
+
+**Date:** Week 1, Day 4
+**Decision:** Do not add CAPTCHA to the lead-capture endpoint. Rate limiting (DRF `AnonRateThrottle`, 20/hour) is the complete control set for this endpoint's current risk profile.
+**Reasoning:** Every security control has a cost (paid by all legitimate users, with certainty) and a benefit (threat prevented, weighted by its probability and impact). CAPTCHA's cost — friction and possible accessibility/UX failure on every single real visitor — is paid 100% of the time. The threat it would close beyond what rate limiting already covers (distributed, multi-IP bot submission) has a low-value payoff for an attacker: junk rows in an anonymous, pre-tenancy waitlist table, no money, no auth bypass. The cost is certain and continuous; the benefit is marginal and low-stakes. The asymmetry does not justify the control here.
+**Options considered:**
+
+- **Rate limiting + CAPTCHA** — rejected. Solves a threat (distributed bot abuse) whose worst case is low-value junk data, at a cost paid by every genuine visitor.
+- **Rate limiting alone (chosen)** — matches blast radius; friction proportional to actual stakes.
+**Consequence:** This verdict is endpoint-specific, not a blanket rule. Revisit explicitly if `/leads/` ever gains value to an attacker (e.g., signup grants a scarce resource), or for higher-stakes endpoints later in the project (auth/login, M-Pesa callback) — different blast radius, different verdict, same framework.
+
+
 ## Environment notes (non-architectural, but worth remembering)
 
 - PostgreSQL 18+ Docker images require the data volume mounted at the parent directory `/var/lib/postgresql`, not the old-style `/var/lib/postgresql/data` — this supports version-namespaced data directories for future `pg_upgrade` operations.
