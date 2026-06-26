@@ -6,3 +6,4 @@ from .serializers import LeadSerializer
 class LeadCreateView(generics.CreateAPIView):
     queryset = Lead.objects.all()
     serializer_class = LeadSerializer
+    throttle_classes = [AnonRateThrottle]

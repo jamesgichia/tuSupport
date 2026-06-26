@@ -80,6 +80,14 @@ TEMPLATES = [
 WSGI_APPLICATION = 'tusupport.wsgi.application'
 
 
+REST_FRAMEWORK = {
+    # ...your existing keys stay here...
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '20/hour',
+    }
+}
+
+
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
