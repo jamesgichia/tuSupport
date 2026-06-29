@@ -19,7 +19,7 @@
 - Celery org-context gap (Phase 3) — pass `organization` explicitly as task argument.
 - Per-process rate-limit counter — revisit when multiple workers/containers exist.
 - Cross-org IDOR test for `Fundraiser` — **now unblocked**, since `Fundraiser` exists. Not written yet.
-- `Lead` model tenancy-exclusion comment — still deferred until `Lead` is next touched.
+- Bug fixed along the way: `leads/views.py` was missing `from rest_framework.throttling import AnonRateThrottle`, causing a `NameError` on server start. Root cause confirmed by James — closed, not carried forward.
 
 ## Next up — Week 2, Day 2 (per scope.md weekly cycle: Frontend Client)
 
