@@ -1,21 +1,26 @@
-**Last updated:** Week 1, Day 5 — closed
-**Active branch:** `main` (no new branches opened this session — audit/review only, no code changes)
+**Last updated:** Week 2, Day 1 — closed
+**Active branch:** `feature/fundraiser-model` (not yet merged to main)
 
-## Completed — Week 1, Day 5 (closed)
+## Completed — Week 2, Day 1
 
-- Day 5 reframed as an orientation + guided walkthrough session (James's first Friday Review), rather than an independent audit. From Week 2's Friday onward, James owns the scope.md §10 audit unsupervised.
-- Full scope.md §10 mindset checklist walked across all Week 1 components (TenantManager/TenantScopedModel, Lead model+view, CORS, rate limiting, ADR-007). Verdict: passes, with two known gaps (already logged: per-process throttle counter, Celery org-context) plus one newly surfaced soft spot below.
-- Resolved the standing open question from Day 4: **does TenantManager protect against IDOR via URL parameters (e.g. `/api/v1/fundraisers/42/`)?** Answer: yes, *conditionally* — Django routes `.get()`/`.filter()`/`.all()` through `get_queryset()` by default, so the custom manager's filtering applies. Protection breaks only if a developer bypasses the manager entirely (raw SQL, `._base_manager`). Action item: once `Fundraiser` exists in Week 2+, write an explicit cross-org test (login as Org A, request Org B's object ID, assert 404) rather than trusting this reasoning alone.
-- Reinforced and generalized the "fail loud, not silent" principle one level up: documentation (ADR log) is itself only a *convention*, not an enforcement mechanism — it protects future developers only if they read it before acting, which nothing in a normal coding workflow guarantees. Real enforcement requires the same loud-failure ladder applied to process: tests + CI gates that catch violations even if the docs are never opened.
+- New `fundraisers` Django app created and registered in `tusupport.settings.INSTALLED_APPS`.
+- `Fundraiser` model built on `fundraisers/models.py`, inheriting `TenantScopedModel` (core.models) — confirmed via `\d fundraisers_fundraiser` in psql: `organization_id` is `bigint NOT NULL` with a working FK constraint to `core_organization`, auto-indexed.
+- Field decisions reasoned through explicitly, not defaulted:
+  - `organization` — FK via TenantScopedModel inheritance. One-to-many (Organization → Fundraiser) confirmed as the correct shape: supports both long-lived orgs running many fundraisers (e.g. a church) and one-off orgs auto-created for a single campaign (e.g. a funeral contribution) without changing the relationship type.
+  - **No `current_amount` field.** Deliberately rejected a stored running total after tracing a concrete failure mode: a corrected/refunded contribution would desync a hand-maintained total with no error or trace. "Amount raised" will be calculated on demand from the future `Contribution` table once it exists — single source of truth, audit-grade per scope.md §2.1.
+  - `goal_amount` — `DecimalField(max_digits=12, decimal_places=2)`, confirmed in Postgres as `numeric(12,2)` — never float, for financial precision.
+  - `status` — `CharField` constrained via `TextChoices` (`draft`/`published`/`closed`), not free text. Prevents invalid/inconsistent state strings (e.g. `"Published"` vs `"published"`) from silently breaking status checks.
+- Migration `fundraisers.0001_initial` generated, SQL reviewed before applying, applied successfully. Verified directly in `psql` via `\d fundraisers_fundraiser` — not just trusted on Django's say-so.
+- Branch discipline (ADR-003) confirmed: all work done on `feature/fundraiser-model`, `main` untouched.
+- Bug fixed along the way: `leads/views.py` was missing `from rest_framework.throttling import AnonRateThrottle`, causing a `NameError` on server start. Likely a regression from an incomplete commit/merge — worth a `git log -- leads/views.py` check to confirm how it happened, not yet done.
 
-## New soft spot identified (not yet fixed, low urgency)
+## Open items carried forward (unchanged from Week 1)
 
-- `Lead` model's tenancy-exclusion (no `organization` FK, doesn't inherit `TenantScopedModel`) is correct and documented in decisions.md, but only documented — nothing in the model file itself warns a future developer who adds an `organization` FK to `Lead` later that they'd also need to switch its manager. Low risk today (no FK exists yet), but cheap to close: a one-line code comment at the point of future modification, not just buried in the ADR log. Defer to whenever `Lead` is next touched — not urgent enough to action now.
+- Celery org-context gap (Phase 3) — pass `organization` explicitly as task argument.
+- Per-process rate-limit counter — revisit when multiple workers/containers exist.
+- Cross-org IDOR test for `Fundraiser` — **now unblocked**, since `Fundraiser` exists. Not written yet.
+- `Lead` model tenancy-exclusion comment — still deferred until `Lead` is next touched.
 
-## In progress / next up
+## Next up — Week 2, Day 2 (per scope.md weekly cycle: Frontend Client)
 
-- Week 2 begins: Phase 2 scope per scope.md §6 — Core Features (fundraiser management first, per natural dependency order).
-- Standing reminder, unchanged: Celery org-context gap (Phase 3) — pass `organization` explicitly as a task argument, fail loud if missing.
-- Standing reminder, unchanged: per-process rate-limit counter gap — revisit when multiple workers/containers are introduced.
-- Standing reminder, new: write the cross-org object-access test (IDOR check) once `Fundraiser` model exists — don't treat today's reasoning as a substitute for an actual test.
-- From next Friday: James runs the scope.md §10 audit independently; Claude's role shifts to pushing back on the reasoning, not demonstrating it first.
+- Likely: Next.js UI work against the new `Fundraiser` model — but no API endpoint exists yet for `Fundraiser` (today was schema-only, by design). Confirm with James whether Day 2 needs a minimal `FundraiserListView`/serializer first, or whether frontend work this cycle targets something else entirely.
