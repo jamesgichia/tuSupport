@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import environ
 import os
+from datetime import timedelta
+
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -43,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+		'rest_framework_simplejwt',
 		'corsheaders',
 		'core',
 		'leads',
@@ -83,10 +86,26 @@ WSGI_APPLICATION = 'tusupport.wsgi.application'
 
 REST_FRAMEWORK = {
     # ...your existing keys stay here...
+		'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '20/hour',
-    }
+				'login': '5/minute',   # Tight — brute force protection
+    },
+		'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
 }
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),   # Short — if stolen, expires fast
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),      # Longer — used to get new access tokens
+    'ROTATE_REFRESH_TOKENS': True,                    # Each refresh issues a new refresh token
+    'BLACKLIST_AFTER_ROTATION': False,                # We'll revisit blacklisting later
+}
+
 
 
 # Database
