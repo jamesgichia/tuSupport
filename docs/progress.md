@@ -1,26 +1,70 @@
-**Last updated:** Week 2, Day 1 — closed
+**Last updated:** Week 2, Day 2 — closed
 **Active branch:** `feature/fundraiser-model` (not yet merged to main)
 
-## Completed — Week 2, Day 1
+## Completed — Week 2, Day 2
 
-- New `fundraisers` Django app created and registered in `tusupport.settings.INSTALLED_APPS`.
-- `Fundraiser` model built on `fundraisers/models.py`, inheriting `TenantScopedModel` (core.models) — confirmed via `\d fundraisers_fundraiser` in psql: `organization_id` is `bigint NOT NULL` with a working FK constraint to `core_organization`, auto-indexed.
-- Field decisions reasoned through explicitly, not defaulted:
-  - `organization` — FK via TenantScopedModel inheritance. One-to-many (Organization → Fundraiser) confirmed as the correct shape: supports both long-lived orgs running many fundraisers (e.g. a church) and one-off orgs auto-created for a single campaign (e.g. a funeral contribution) without changing the relationship type.
-  - **No `current_amount` field.** Deliberately rejected a stored running total after tracing a concrete failure mode: a corrected/refunded contribution would desync a hand-maintained total with no error or trace. "Amount raised" will be calculated on demand from the future `Contribution` table once it exists — single source of truth, audit-grade per scope.md §2.1.
-  - `goal_amount` — `DecimalField(max_digits=12, decimal_places=2)`, confirmed in Postgres as `numeric(12,2)` — never float, for financial precision.
-  - `status` — `CharField` constrained via `TextChoices` (`draft`/`published`/`closed`), not free text. Prevents invalid/inconsistent state strings (e.g. `"Published"` vs `"published"`) from silently breaking status checks.
-- Migration `fundraisers.0001_initial` generated, SQL reviewed before applying, applied successfully. Verified directly in `psql` via `\d fundraisers_fundraiser` — not just trusted on Django's say-so.
-- Branch discipline (ADR-003) confirmed: all work done on `feature/fundraiser-model`, `main` untouched.
-- Bug fixed along the way: `leads/views.py` was missing `from rest_framework.throttling import AnonRateThrottle`, causing a `NameError` on server start. Likely a regression from an incomplete commit/merge — worth a `git log -- leads/views.py` check to confirm how it happened, not yet done.
+- `fundraisers/serializers.py` built with explicit field allow-list.
+  `organization` deliberately excluded — never client-writable.
+  `status`, `id`, `created_at` marked read-only.
 
-## Open items carried forward (unchanged from Week 1)
+- `FundraiserListCreateView` built in `fundraisers/views.py`:
+  - GET: public, unauthenticated, filtered to `status='published'` only
+  - POST: requires authentication, org-scoped via `Membership`
+  - Overrides `create()` entirely — not just `perform_create()` — to
+    bypass DRF's default `serializer.save()` which routes through
+    `TenantManager` and raises `NotImplementedError`
 
-- Celery org-context gap (Phase 3) — pass `organization` explicitly as task argument.
-- Per-process rate-limit counter — revisit when multiple workers/containers exist.
-- Cross-org IDOR test for `Fundraiser` — **now unblocked**, since `Fundraiser` exists. Not written yet.
-- Bug fixed along the way: `leads/views.py` was missing `from rest_framework.throttling import AnonRateThrottle`, causing a `NameError` on server start. Root cause confirmed by James — closed, not carried forward.
+- URL wired at `/api/v1/fundraisers/` via `tusupport/urls.py`
+  → `fundraisers/urls.py`
 
-## Next up — Week 2, Day 2 (per scope.md weekly cycle: Frontend Client)
+- `Membership` model built in `core/models.py`:
+  - Join table: `User` ↔ `Organization`
+  - `role` field: `TextChoices` (admin/member)
+  - `unique_together` on `(user, organization)` — database-enforced,
+    prevents duplicate memberships
+  - References `settings.AUTH_USER_MODEL` not a hardcoded import —
+    survives a future custom User model
+  - Migration reviewed via `sqlmigrate` before applying — FK constraints
+    and unique constraint confirmed in raw SQL
 
-- Likely: Next.js UI work against the new `Fundraiser` model — but no API endpoint exists yet for `Fundraiser` (today was schema-only, by design). Confirm with James whether Day 2 needs a minimal `FundraiserListView`/serializer first, or whether frontend work this cycle targets something else entirely.
+- `FundraiserList` Server Component built in
+  `src/components/FundraiserList.tsx`:
+  - Fetches `GET /api/v1/fundraisers/` at render time (server-side)
+  - Handles empty state cleanly
+  - Wired into `src/app/page.tsx` alongside `LandingHero`/`EmailSignup`
+  - Verified live in browser — correctly shows "No fundraisers available
+    yet." (only fundraiser in DB is `draft`, correctly hidden)
+
+## Real gaps surfaced today (by running the system, not guessing)
+
+- `TenantManager.get_queryset()` is a deliberate unimplemented stub.
+  Any feature needing real tenant-scoped queries will hit the same
+  `NotImplementedError` until middleware + real filtering logic is built.
+  Today's endpoints bypass it deliberately via `_base_manager` (GET)
+  and `Fundraiser(...).save()` (POST).
+
+- No authentication system exists at all — no login endpoint, no JWT,
+  no token issuance. POST was tested via Django's `Client.force_login()`
+  (valid for logic testing, not a substitute for real auth).
+
+- No signup/onboarding flow — nothing creates `Membership` rows
+  organically. Today's test membership was manually seeded via shell.
+
+- No custom `User` model exists. Django's default `auth.User` is in use
+  with no `organization` field — the `Membership` table is the only
+  User↔Organization link.
+
+## Open items carried forward
+
+- Identity & Access Management not built yet — JWT auth, login endpoint,
+  registration flow — this is the most pressing foundational gap
+- Real `TenantManager` filtering logic + middleware (ADR-004 implementation)
+- IDOR test for `Fundraiser` — unblocked now, not yet written
+- Celery org-context gap (Phase 3) — unchanged
+- Per-process rate-limit counter — unchanged
+
+## Next up — Week 2, Day 3 (Integration Layer)
+
+- Build JWT authentication: login endpoint, token issuance
+- This unblocks: real POST testing via curl/Postman, frontend auth flow,
+  and every future feature that assumes a logged-in user exists
