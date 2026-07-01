@@ -1,70 +1,67 @@
-**Last updated:** Week 2, Day 2 — closed
+**Last updated:** Week 2, Day 3 — closed
 **Active branch:** `feature/fundraiser-model` (not yet merged to main)
 
-## Completed — Week 2, Day 2
+## Completed — Week 2, Day 3
 
-- `fundraisers/serializers.py` built with explicit field allow-list.
-  `organization` deliberately excluded — never client-writable.
-  `status`, `id`, `created_at` marked read-only.
+- `djangorestframework-simplejwt` installed, added to `requirements.txt`
+- `DEFAULT_AUTHENTICATION_CLASSES` set to `JWTAuthentication` in DRF settings
+- Token lifetimes configured in `SIMPLE_JWT`:
+  - Access token: 15 minutes
+  - Refresh token: 7 days
+  - `ROTATE_REFRESH_TOKENS = True` — each refresh retires the old token, issues a new pair
+- `POST /api/v1/auth/token/` — login endpoint, issues access + refresh token pair
+- `POST /api/v1/auth/token/refresh/` — refresh endpoint, rotates token pair
+- `LoginRateThrottle` built in `core/throttles.py` — scope: `login`, limit: 5/minute
+- `ThrottledTokenObtainPairView` in `core/views.py` wraps simplejwt's default
+  login view with the login throttle
+- URLs wired in `tusupport/urls.py` for both auth endpoints
 
-- `FundraiserListCreateView` built in `fundraisers/views.py`:
-  - GET: public, unauthenticated, filtered to `status='published'` only
-  - POST: requires authentication, org-scoped via `Membership`
-  - Overrides `create()` entirely — not just `perform_create()` — to
-    bypass DRF's default `serializer.save()` which routes through
-    `TenantManager` and raises `NotImplementedError`
+## Verified at HTTP layer
 
-- URL wired at `/api/v1/fundraisers/` via `tusupport/urls.py`
-  → `fundraisers/urls.py`
+- Wrong password → `401 No active account found`
+- No token on protected endpoint → `401 Authentication credentials were not provided`
+- Valid token + org membership → `201 Created` (fundraiser created successfully)
+- Brute force test (7 rapid attempts) → `401` × 5, then `429 Too Many Requests`
+- Refresh endpoint → returns new `access` + new `refresh` token (rotation confirmed)
+- Seeded `Membership` for user `james` via Django shell to unblock POST testing
 
-- `Membership` model built in `core/models.py`:
-  - Join table: `User` ↔ `Organization`
-  - `role` field: `TextChoices` (admin/member)
-  - `unique_together` on `(user, organization)` — database-enforced,
-    prevents duplicate memberships
-  - References `settings.AUTH_USER_MODEL` not a hardcoded import —
-    survives a future custom User model
-  - Migration reviewed via `sqlmigrate` before applying — FK constraints
-    and unique constraint confirmed in raw SQL
+## Security reasoning established this session
 
-- `FundraiserList` Server Component built in
-  `src/components/FundraiserList.tsx`:
-  - Fetches `GET /api/v1/fundraisers/` at render time (server-side)
-  - Handles empty state cleanly
-  - Wired into `src/app/page.tsx` alongside `LandingHero`/`EmailSignup`
-  - Verified live in browser — correctly shows "No fundraisers available
-    yet." (only fundraiser in DB is `draft`, correctly hidden)
-
-## Real gaps surfaced today (by running the system, not guessing)
-
-- `TenantManager.get_queryset()` is a deliberate unimplemented stub.
-  Any feature needing real tenant-scoped queries will hit the same
-  `NotImplementedError` until middleware + real filtering logic is built.
-  Today's endpoints bypass it deliberately via `_base_manager` (GET)
-  and `Fundraiser(...).save()` (POST).
-
-- No authentication system exists at all — no login endpoint, no JWT,
-  no token issuance. POST was tested via Django's `Client.force_login()`
-  (valid for logic testing, not a substitute for real auth).
-
-- No signup/onboarding flow — nothing creates `Membership` rows
-  organically. Today's test membership was manually seeded via shell.
-
-- No custom `User` model exists. Django's default `auth.User` is in use
-  with no `organization` field — the `Membership` table is the only
-  User↔Organization link.
+- JWT payload is base64-readable by anyone — not encrypted, only signed
+- Signature is HMAC-SHA256 keyed on Django's `SECRET_KEY` — payload
+  tampering invalidates the signature; forgery is impossible without the key
+- `SECRET_KEY` is the cryptographic root of the entire auth system — leaking
+  it means every token ever issued is forgeable
+- Refresh token is the higher-value attack target: stolen refresh token =
+  ability to mint new access tokens for up to 7 days
+- `localStorage` is wrong for refresh tokens — readable by any JavaScript,
+  including XSS payloads
+- Correct storage model (to implement when frontend auth is wired):
+  - Access token → JavaScript memory only (lost on page refresh, by design)
+  - Refresh token → `HttpOnly` cookie (browser enforces: no JS can read it)
+- `HttpOnly` cookies introduce CSRF risk — mitigated by CSRF tokens
+  (deferred to frontend auth wiring session)
+- `ROTATE_REFRESH_TOKENS = True` acts as a trip-wire: a stolen refresh token
+  used by an attacker invalidates the legitimate user's copy on next refresh
 
 ## Open items carried forward
 
-- Identity & Access Management not built yet — JWT auth, login endpoint,
-  registration flow — this is the most pressing foundational gap
-- Real `TenantManager` filtering logic + middleware (ADR-004 implementation)
-- IDOR test for `Fundraiser` — unblocked now, not yet written
-- Celery org-context gap (Phase 3) — unchanged
-- Per-process rate-limit counter — unchanged
+- **IDOR cross-org test — merge blocker.** Must be written and passing
+  before `feature/fundraiser-model` merges to main. This is Day 4's
+  primary deliverable.
+- Frontend auth flow not yet wired (access token in memory + refresh token
+  in HttpOnly cookie) — deferred to frontend integration session
+- `TenantManager` real filtering logic + middleware (ADR-004) — still
+  bypassed via `_base_manager` (GET) and direct `.save()` (POST)
+- No user registration endpoint — new users must be seeded manually
+  via Django shell
+- Celery org-context gap — Phase 3, unchanged
+- Per-process rate-limit counter (Redis needed for production) — unchanged
 
-## Next up — Week 2, Day 3 (Integration Layer)
+## Next up — Week 2, Day 4 (Security & Hardening)
 
-- Build JWT authentication: login endpoint, token issuance
-- This unblocks: real POST testing via curl/Postman, frontend auth flow,
-  and every future feature that assumes a logged-in user exists
+- Write and run the IDOR cross-org test:
+  - Create two organizations, two users, two fundraisers
+  - Confirm user A cannot read or write user B's fundraisers
+  - This test must pass before any merge to main
+- IDOR test passing = `feature/fundraiser-model` is merge-ready
