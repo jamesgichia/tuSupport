@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from rest_framework import generics
+from rest_framework.throttling import AnonRateThrottle
 from .models import Lead
 from .serializers import LeadSerializer
 
