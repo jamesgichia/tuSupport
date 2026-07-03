@@ -32,12 +32,8 @@ class Membership(models.Model):
 
 
 class TenantManager(models.Manager):
-    def get_queryset(self):
-        raise NotImplementedError(
-            "TenantManager has no filtering logic yet (ADR-004). "
-            "Do not use TenantScopedModel subclasses until middleware "
-            "sets the current-organization context. See DECISIONS.md ADR-004."
-        )
+    def for_org(self, organization):
+        return self.model._base_manager.filter(organization=organization)
 
 
 

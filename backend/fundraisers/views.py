@@ -9,9 +9,12 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
     serializer_class = FundraiserSerializer
 
     def get_queryset(self):
-        if self.request.method == 'GET':
-            return Fundraiser._base_manager.filter(status='published')
-        return Fundraiser._base_manager.all()
+        if not self.request.user.is_authenticated:
+            return Fundraiser._base_manager.none()
+        membership = self.request.user.membership_set.first()
+        if membership is None:
+            return Fundraiser._base_manager.none()
+        return Fundraiser.objects.for_org(membership.organization).filter(status='published')
 
     def get_permissions(self):
         if self.request.method == 'POST':
