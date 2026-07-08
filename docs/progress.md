@@ -1,50 +1,41 @@
-**Last updated:** Week 3, Day 1 — Monday Backend day closed
+**Last updated:** Week 3, Day 2 — Tuesday Frontend day closed
 
 ## Completed today
 
-**URL restructure**
+**Backend — login response extended**
 
-- Flat `/api/v1/fundraisers/` deleted (attack surface reduction)
-- Replaced with `/api/v1/organizations/<int:org_id>/fundraisers/`
-- `org_id` now explicitly declared on every request
+- `ThrottledTokenObtainPairView.post()` overridden to append org list after JWT generation
+- Returns `access`, `refresh`, and `organizations` (id, name, role) in one response
+- User looked up by username after `status 200` confirmed — not from `request.user` (which is AnonymousUser post-JWT-auth)
+- Test written and passing: `test_login_returns_org_list`
 
-**IDOR fix — both read and write paths**
+**Frontend — org picker flow**
 
-- `get_membership_or_404()` introduced as single enforcement point
-- Reads `org_id` from URL, verifies against Membership table
-- Returns 404 on mismatch — never 403 (no information leakage)
-- Both `get_queryset()` and `create()` now go through this gate
+- `/login` — collects credentials, calls `/api/v1/auth/token/`, stores tokens and org list
+- `/pick-org` — reads org list from sessionStorage, renders selectable org buttons with role labels
+- `/dashboard/[orgId]` — verifies orgId against sessionStorage, fetches fundraisers from `/api/v1/organizations/<orgId>/fundraisers/` using Bearer token, renders empty state correctly
 
-**Role-based permission**
+**Security discussion — HttpOnly cookie tradeoff**
 
-- `create()` now checks `membership.role == ADMIN` before proceeding
-- Plain members blocked with 403 — they can read, not write
-- Role check lives in `create()` only, not in `get_membership_or_404()`
-  (members must still be able to list fundraisers)
-
-**All three Week 3 merge blockers closed**
-
-- Write-IDOR test: passing
-- LoginRateThrottle enforcement test: passing
-- Role permission test: passing
-
-**Test pollution fix**
-
-- LoginRateThrottle was bleeding across test classes
-- Fixed via `unittest.mock.patch` on `allow_request` in RolePermissionTest
-- `tearDown()` guarantees patcher stops regardless of test outcome
+- Documented why refresh token in localStorage is a temporary, acceptable risk at current stage
+- Documented why HttpOnly + Secure + SameSite=Strict is the correct final state
+- ADR-008 written and appended to decisions.md
 
 ## Key principles reinforced today
 
-- Attack surface reduction ≠ fail-loud — different principles, different audit line items
-- 404 vs 403: existence of a resource must not be confirmed to non-members (information disclosure)
-- Single point of enforcement: one gate, not two inline copies
-- Test-first loop: write test → confirm failure → fix → confirm pass
-- Test pollution: throttle state persists across tests unless explicitly patched
+- Authentication (who are you) and authorization context (which org are you acting as) change at different rates — never bundle them in the same token
+- sessionStorage org check is a UX control, not a security control — security lives on the server (`get_membership_or_404()`)
+- Client-side validation is UX-only — an attacker using curl never touches the browser
+- HttpOnly closes XSS theft vector; SameSite=Strict closes the CSRF vector HttpOnly introduces
+- 400 = malformed request (nothing to check yet); 404 = valid request, existence denied (information hiding)
 
-## Next up — Week 3, Day 2 (Tuesday Frontend)
+## Deferred
 
-- Org picker flow: login returns JWT + org list
-- Frontend stores active org as UI state (not in JWT)
-- Every request declares org via URL
-- CSRF tradeoff discussion when HttpOnly cookie for refresh token introduced
+- Refresh token HttpOnly cookie — requires backend to set `Set-Cookie` header on login and read cookie on refresh (ADR-008, must land before Phase 3)
+- CSRF middleware wiring for the HttpOnly cookie flow
+
+## Next up — Week 3, Day 3 (Wednesday Integration)
+
+- Wire frontend login flow to handle token expiry and refresh
+- Ensure every authenticated request uses the access token correctly
+- Begin integration testing of the full login → org picker → dashboard flow

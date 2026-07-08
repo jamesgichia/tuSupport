@@ -77,6 +77,19 @@
 **Consequence:** This verdict is endpoint-specific, not a blanket rule. Revisit explicitly if `/leads/` ever gains value to an attacker (e.g., signup grants a scarce resource), or for higher-stakes endpoints later in the project (auth/login, M-Pesa callback) — different blast radius, different verdict, same framework.
 
 
+## ADR-008: Refresh token storage — HttpOnly cookie over localStorage
+
+**Date:** Week 3, Day 2
+**Decision:** Store the refresh token in an `HttpOnly; Secure; SameSite=Strict` cookie set by the backend, not in localStorage. The access token stays in localStorage temporarily — acceptable because it is short-lived (minutes).
+**Reasoning:** localStorage is readable by any JavaScript on the page. A single XSS vulnerability anywhere on the frontend gives an attacker access to whatever is stored there. The refresh token is the high-value target — it is long-lived (days/weeks) and can be used to mint fresh access tokens indefinitely. An HttpOnly cookie is invisible to JavaScript entirely, closing the XSS theft vector. SameSite=Strict closes the CSRF vector that HttpOnly cookies introduce — the browser will not send the cookie on cross-origin requests.
+**Options considered:**
+
+- **localStorage for both tokens** — rejected for refresh token. XSS risk is unacceptable for a long-lived credential in a financial/welfare-data system.
+- **HttpOnly cookie for refresh token (chosen)** — eliminates XSS theft. CSRF mitigated by SameSite=Strict. Requires backend to set the cookie via Set-Cookie header on login response.
+**Why deferred:** Requires a backend change — Django must set the cookie on login and read it on token refresh, instead of passing it in JSON. This is a backend-day concern, not a frontend-day one.
+**Consequence:** Current localStorage implementation for the refresh token is explicitly temporary. Must be replaced before any production deployment or payment integration begins (Phase 3 at the latest).
+**Tradeoff accepted:** Until the backend change is made, the refresh token remains exposed to XSS. Acceptable at current stage — no real user data, no payment integration yet. Not acceptable past Phase 2.
+
 ## Environment notes (non-architectural, but worth remembering)
 
 - PostgreSQL 18+ Docker images require the data volume mounted at the parent directory `/var/lib/postgresql`, not the old-style `/var/lib/postgresql/data` — this supports version-namespaced data directories for future `pg_upgrade` operations.
