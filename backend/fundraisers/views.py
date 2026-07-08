@@ -1,20 +1,36 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
+from django.http import Http404
 from .models import Fundraiser
 from .serializers import FundraiserSerializer
+from core.models import Membership
 
 
 class FundraiserListCreateView(generics.ListCreateAPIView):
     serializer_class = FundraiserSerializer
 
+    def get_membership_or_404(self):
+        """
+        Single source of truth for the org check.
+        Reads org_id from the URL, verifies the user
+        actually belongs to it. Returns membership or
+        raises 404 — never 403 (don't confirm org exists).
+        """
+        org_id = self.kwargs["org_id"]  # declared intent from URL
+        membership = self.request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if membership is None:
+            raise Http404  # attacker learns nothing
+        return membership
+
     def get_queryset(self):
         if not self.request.user.is_authenticated:
             return Fundraiser._base_manager.none()
-        membership = self.request.user.membership_set.first()
-        if membership is None:
-            return Fundraiser._base_manager.none()
-        return Fundraiser.objects.for_org(membership.organization).filter(status='published')
+        membership = self.get_membership_or_404()  # verified, not assumed
+        return Fundraiser.objects.for_org(
+            membership.organization
+        ).filter(status='published')
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -25,9 +41,11 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        membership = request.user.membership_set.first()
-        if membership is None:
-            raise PermissionDenied("You must belong to an organization to create a fundraiser.")
+        membership = self.get_membership_or_404()
+
+        # Role check — members can read, only admins can write
+        if membership.role != Membership.Role.ADMIN:
+            raise PermissionDenied("Only organisation admins can create fundraisers.")
 
         instance = Fundraiser(
             organization=membership.organization,

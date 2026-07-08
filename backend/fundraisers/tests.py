@@ -4,6 +4,9 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from core.models import Organization, Membership
 from fundraisers.models import Fundraiser
+from core.throttles import LoginRateThrottle
+from unittest.mock import patch
+
 
 User = get_user_model()
 
@@ -43,7 +46,7 @@ class IDORFundraiserTest(TestCase):
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
         # user_a hits the fundraiser list
-        response = client.get("/api/v1/fundraisers/")
+        response = client.get(f"/api/v1/organizations/{self.org_a.id}/fundraisers/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Extract IDs from response
@@ -55,3 +58,94 @@ class IDORFundraiserTest(TestCase):
             returned_ids,
             "IDOR vulnerability: Org A user can see Org B's fundraiser"
         )
+
+
+    def test_user_cannot_create_fundraiser_in_org_they_dont_belong_to(self):
+        """Adversarial test: user_a belongs to org_a only.
+        Attempt to POST a fundraiser via org_b's URL.
+        Expected (once fixed): 404 — server refuses, nothing created.
+        """
+        client = APIClient()
+        response = client.post("/api/v1/auth/token/", {
+            "username": "user_a",
+            "password": "pass_a"
+        })
+        token = response.data["access"]
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        response = client.post(
+            f"/api/v1/organizations/{self.org_b.id}/fundraisers/",
+            {"title": "Malicious Fundraiser", "goal_amount": 1000},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(
+            Fundraiser.objects.filter(
+                organization=self.org_b, title="Malicious Fundraiser"
+            ).exists()
+        )
+
+
+class LoginThrottleTest(TestCase):
+    """
+    Proves the login endpoint blocks brute force attempts.
+    5 attempts allowed per minute — 6th must return 429.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="throttle_user", password="correct_pass"
+        )
+
+    def test_sixth_login_attempt_is_blocked(self):
+        # 5 allowed attempts (wrong password — we're simulating brute force)
+        for _ in range(5):
+            self.client.post("/api/v1/auth/token/", {
+                "username": "throttle_user",
+                "password": "wrong_pass"
+            })
+
+        # 6th attempt — must be blocked regardless of credentials
+        response = self.client.post("/api/v1/auth/token/", {
+            "username": "throttle_user",
+            "password": "correct_pass"
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+
+
+class RolePermissionTest(TestCase):
+
+    def setUp(self):
+        # Disable throttling for role tests — throttle behavior
+        # is tested separately in LoginThrottleTest
+        self.throttle_patcher = patch(
+            'core.throttles.LoginRateThrottle.allow_request',
+            return_value=True
+        )
+        self.throttle_patcher.start()
+
+        self.client = APIClient()
+        self.org = Organization.objects.create(name="Test Org")
+
+        self.admin = User.objects.create_user(
+            username="admin_user", password="pass"
+        )
+        Membership.objects.create(
+            user=self.admin, organization=self.org, role="admin"
+        )
+
+        self.member = User.objects.create_user(
+            username="plain_member", password="pass"
+        )
+        Membership.objects.create(
+            user=self.member, organization=self.org, role="member"
+        )
+
+    def tearDown(self):
+        # Always stop the patcher — never leave mocks running
+        self.throttle_patcher.stop()

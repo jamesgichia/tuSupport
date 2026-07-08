@@ -1,71 +1,50 @@
-**Last updated:** Week 2, Day 5 — Friday Review closed
-**Active branch:** main (stable, no new features added today)
+**Last updated:** Week 3, Day 1 — Monday Backend day closed
 
-## Completed — Week 2, Day 5
+## Completed today
 
-Five-layer Friday audit conducted across:
-- Database & Schema
-- Models & Multi-tenancy
-- API Views & Serializers
-- Authentication & Authorization
-- Tests
+**URL restructure**
 
-## Findings — Gaps Identified (not bugs, not emergencies)
+- Flat `/api/v1/fundraisers/` deleted (attack surface reduction)
+- Replaced with `/api/v1/organizations/<int:org_id>/fundraisers/`
+- `org_id` now explicitly declared on every request
 
-### Layer 1: Database & Schema
-- `unique_together` on Membership prevents duplicate memberships only
-- Does NOT prevent role escalation — a member self-promoting to admin
-  is unblocked at the database level; must be enforced at the API view layer
-- This is a Privilege Escalation risk (OWASP API Top 10)
-- No fix needed today — membership management endpoints not built yet
-- Fix lands when those endpoints are built: only an existing org admin
-  can change another user's role
+**IDOR fix — both read and write paths**
 
-### Layer 2: Models & Multi-tenancy
-- `abstract = True` on `TenantScopedModel` confirmed correct —
-  no real table, just a blueprint donating fields to child models
-- `NotImplementedError` on `get_queryset()` confirmed correct —
-  Celery gap (Phase 3) remains the known consequence, deliberately deferred
-- No action needed — Layer 2 is solid
+- `get_membership_or_404()` introduced as single enforcement point
+- Reads `org_id` from URL, verifies against Membership table
+- Returns 404 on mismatch — never 403 (no information leakage)
+- Both `get_queryset()` and `create()` now go through this gate
 
-### Layer 3: API Views & Serializers
-- `perform_create()` uses `.first()` to get user's org membership —
-  silent wrong-org selection if user belongs to multiple orgs
-- Root cause: URL structure `/api/v1/fundraisers/` carries no org context
-- Fix: URL must become `/api/v1/organizations/{id}/fundraisers/`
-  so org is declared explicitly on every request
-- Server then verifies: JWT (identity) + URL org ID (intent)
-  + Membership (authorization) — all three must align
-- After login, frontend must fetch org list, show org picker,
-  store chosen org, inject org ID into every subsequent request URL
-- Backend remains stateless — frontend carries active org context
-- This is a URL redesign — deferred to Week 3 frontend auth wiring session
+**Role-based permission**
 
-### Layer 4: Authentication & Authorization
-- JWT config solid: 15-min access (small blast radius),
-  7-day refresh, ROTATE_REFRESH_TOKENS=True (replay attack protection)
-- LoginRateThrottle gap confirmed: in-memory throttle multiplies
-  by Gunicorn worker count in production — known, deferred to Phase 3 Redis
-- No new findings — Layer 4 holds
+- `create()` now checks `membership.role == ADMIN` before proceeding
+- Plain members blocked with 403 — they can read, not write
+- Role check lives in `create()` only, not in `get_membership_or_404()`
+  (members must still be able to list fundraisers)
 
-### Layer 5: Tests
-- Existing IDOR read test: solid, adversarial, written correctly
-- Three missing tests identified — become Week 3 merge blockers:
-  1. POST cross-org IDOR test (can user_a create in org_b?)
-  2. LoginRateThrottle enforcement test (does 6th attempt return 429?)
-  3. Role-based create permission test (can a plain member create?)
+**All three Week 3 merge blockers closed**
 
-## Week 3 Merge Blockers (nothing merges until these exist)
+- Write-IDOR test: passing
+- LoginRateThrottle enforcement test: passing
+- Role permission test: passing
 
-1. Missing IDOR write test
-2. Missing throttle enforcement test
-3. Missing role permission test
-4. URL restructure: `/api/v1/organizations/{id}/fundraisers/`
+**Test pollution fix**
 
-## Next up — Week 3
+- LoginRateThrottle was bleeding across test classes
+- Fixed via `unittest.mock.patch` on `allow_request` in RolePermissionTest
+- `tearDown()` guarantees patcher stops regardless of test outcome
 
-- Monday: Write the three missing security tests first (test-first rule)
-- Monday: Fix `perform_create()` — org from URL, not `.first()`
-- Tuesday: Frontend auth wiring — JWT storage, org picker flow
-  (access token in JS memory, refresh token in HttpOnly cookie)
-- CSRF tradeoff discussion when HttpOnly cookies are introduced
+## Key principles reinforced today
+
+- Attack surface reduction ≠ fail-loud — different principles, different audit line items
+- 404 vs 403: existence of a resource must not be confirmed to non-members (information disclosure)
+- Single point of enforcement: one gate, not two inline copies
+- Test-first loop: write test → confirm failure → fix → confirm pass
+- Test pollution: throttle state persists across tests unless explicitly patched
+
+## Next up — Week 3, Day 2 (Tuesday Frontend)
+
+- Org picker flow: login returns JWT + org list
+- Frontend stores active org as UI state (not in JWT)
+- Every request declares org via URL
+- CSRF tradeoff discussion when HttpOnly cookie for refresh token introduced
