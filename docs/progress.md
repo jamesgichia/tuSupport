@@ -1,41 +1,77 @@
-**Last updated:** Week 3, Day 2 — Tuesday Frontend day closed
+**Last updated:** Week 3, Day 3 — Wednesday Integration day closed
 
-## Completed today
+---
 
-**Backend — login response extended**
+## Completed — Week 3, Day 3
 
-- `ThrottledTokenObtainPairView.post()` overridden to append org list after JWT generation
-- Returns `access`, `refresh`, and `organizations` (id, name, role) in one response
-- User looked up by username after `status 200` confirmed — not from `request.user` (which is AnonymousUser post-JWT-auth)
-- Test written and passing: `test_login_returns_org_list`
+**Frontend — Axios interceptor and token refresh flow**
 
-**Frontend — org picker flow**
+- Created `frontend/src/lib/axios.ts` — single configured Axios instance for the entire frontend; all components import this, never raw axios or fetch
+- Request interceptor attaches Bearer token from `sessionStorage` automatically on every outgoing request — no component handles tokens manually
+- Response interceptor catches `401` → silently calls `/api/v1/auth/token/refresh/` → retries original request with new access token → redirects to `/login` only if refresh itself fails
+- `_retry` flag on original request prevents infinite loop if the refresh endpoint itself returns `401`
+- Plain `axios.post()` used for the refresh call (not `apiClient`) — prevents the interceptor triggering itself recursively
 
-- `/login` — collects credentials, calls `/api/v1/auth/token/`, stores tokens and org list
-- `/pick-org` — reads org list from sessionStorage, renders selectable org buttons with role labels
-- `/dashboard/[orgId]` — verifies orgId against sessionStorage, fetches fundraisers from `/api/v1/organizations/<orgId>/fundraisers/` using Bearer token, renders empty state correctly
+**Token storage standardised**
 
-**Security discussion — HttpOnly cookie tradeoff**
+- Login page was storing tokens in `localStorage` — moved to `sessionStorage` to match what the interceptor reads
+- All three writes (`access_token`, `refresh_token`, `organizations`) now consistently use `sessionStorage` across all pages
 
-- Documented why refresh token in localStorage is a temporary, acceptable risk at current stage
-- Documented why HttpOnly + Secure + SameSite=Strict is the correct final state
-- ADR-008 written and appended to decisions.md
+**Dashboard cleaned up**
+
+- Replaced raw `fetch()` and manually attached Bearer header with `apiClient.get()` — token handling fully delegated to interceptor
+- No component in the app now touches tokens directly
+
+**Dead code removed**
+
+- Deleted `FundraiserList.tsx` — was hitting the deleted flat `/api/v1/fundraisers/` route, a multi-tenancy violation on a public page
+- Removed import from landing page (`page.tsx`)
+
+**Build fixed**
+
+- Root cause: `NODE_ENV=development` set in shell environment triggered a confirmed Next.js bug — Pages Router runtime loaded during static 404 generation even in a pure App Router project
+- Fix: hardcoded `NODE_ENV=production next build` in `package.json` build script so shell environment can never interfere
+- Added `not-found.tsx` as explicit App Router 404 handler to prevent Next.js falling back to Pages Router default
+
+**Integration test — verified live**
+
+- Full flow tested manually in browser against live dev servers
+- Login → org picker → dashboard loads fundraisers correctly end to end
+- No console errors, no network failures
+
+---
 
 ## Key principles reinforced today
 
-- Authentication (who are you) and authorization context (which org are you acting as) change at different rates — never bundle them in the same token
-- sessionStorage org check is a UX control, not a security control — security lives on the server (`get_membership_or_404()`)
-- Client-side validation is UX-only — an attacker using curl never touches the browser
-- HttpOnly closes XSS theft vector; SameSite=Strict closes the CSRF vector HttpOnly introduces
-- 400 = malformed request (nothing to check yet); 404 = valid request, existence denied (information hiding)
+- One place handles tokens — the interceptor. Components are consumers of data, not managers of auth state. Scattering token logic across components is how you get inconsistencies and security gaps.
+- `_retry` flag is the guard against infinite refresh loops — without it, a failed refresh returns `401`, which triggers another refresh, indefinitely
+- Dead routes are attack surface — deleting `FundraiserList` wasn't just cleanup, it removed a component pointing at a deliberately deleted endpoint
+- Shell environment variables can silently break build tooling — always verify `NODE_ENV` before blaming your code
+- A passing build is not the same as a working system — manual end-to-end verification is mandatory before closing a session
+
+---
 
 ## Deferred
 
-- Refresh token HttpOnly cookie — requires backend to set `Set-Cookie` header on login and read cookie on refresh (ADR-008, must land before Phase 3)
+- Refresh token → `HttpOnly; Secure; SameSite=Strict` cookie (ADR-008) — requires Django to set `Set-Cookie` on login and read cookie on refresh; must land before Phase 3 (payment integration)
 - CSRF middleware wiring for the HttpOnly cookie flow
+- Detail endpoint `GET /api/v1/organizations/<org_id>/fundraisers/<id>/` — carries same IDOR risk as list endpoint; write the failing test first, then implement
 
-## Next up — Week 3, Day 3 (Wednesday Integration)
+---
 
-- Wire frontend login flow to handle token expiry and refresh
-- Ensure every authenticated request uses the access token correctly
-- Begin integration testing of the full login → org picker → dashboard flow
+## Completed this week (Week 3 summary so far)
+
+| Day | Focus | Status |
+|---|---|---|
+| Monday | Backend — login response returns org list with roles | ✅ Done |
+| Tuesday | Frontend — org picker flow (`/login`, `/pick-org`, `/dashboard/[orgId]`) | ✅ Done |
+| Wednesday | Integration — Axios interceptor, token refresh, live flow verified | ✅ Done |
+
+---
+
+## Next up — Week 3, Day 4 (Thursday Security & Hardening)
+
+- Review the Axios interceptor through an attacker-mindset lens — what could an attacker do against the current auth flow?
+- Identify gaps remaining before Phase 3
+- Security hardening pass on the full auth flow (login → token storage → refresh → dashboard)
+- Write integration tests for token expiry and refresh scenarios
