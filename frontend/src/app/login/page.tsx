@@ -29,8 +29,8 @@ export default function LoginPage() {
       }
 
       // TODO: swap access token to HttpOnly cookie when backend sets it
-      localStorage.setItem("access_token", data.access);
-      localStorage.setItem("refresh_token", data.refresh);
+      sessionStorage.setItem("access_token", data.access);
+			sessionStorage.setItem("refresh_token", data.refresh);
 
       // Store org list in sessionStorage — UI state only, not a security control
       sessionStorage.setItem("organizations", JSON.stringify(data.organizations));
