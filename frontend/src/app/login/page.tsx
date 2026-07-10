@@ -16,10 +16,10 @@ export default function LoginPage() {
 
     try {
       const res = await fetch("http://localhost:8000/api/v1/auth/token/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ username, password }),
+			});
 
       const data = await res.json();
 
@@ -30,7 +30,6 @@ export default function LoginPage() {
 
       // TODO: swap access token to HttpOnly cookie when backend sets it
       sessionStorage.setItem("access_token", data.access);
-			sessionStorage.setItem("refresh_token", data.refresh);
 
       // Store org list in sessionStorage — UI state only, not a security control
       sessionStorage.setItem("organizations", JSON.stringify(data.organizations));
