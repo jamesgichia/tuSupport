@@ -1,3 +1,6 @@
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from django.http import Http404
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.response import Response
@@ -5,6 +8,8 @@ from rest_framework import status
 from core.throttles import LoginRateThrottle
 from core.models import Membership
 from django.contrib.auth import get_user_model
+from core.serializers import MembershipSerializer
+
 
 User = get_user_model()
 
@@ -83,3 +88,44 @@ class CookieTokenRefreshView(TokenRefreshView):
                 response.set_cookie(REFRESH_COOKIE_NAME, new_refresh, **COOKIE_SETTINGS)
 
         return response
+
+
+
+class MembershipUpdateView(generics.UpdateAPIView):
+    """
+    PATCH only — allows role changes by admins.
+    Members attempting to escalate their own role are rejected
+    at the serializer level (validate_role).
+    """
+    serializer_class = MembershipSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['patch']  # explicitly block PUT — partial updates only
+
+    def get_object(self):
+        org_id = self.kwargs['org_id']
+        membership_id = self.kwargs['membership_id']
+
+        # First verify the requester belongs to this org
+        # 404 not 403 — don't confirm the org exists to outsiders
+        requester_membership = Membership.objects.filter(
+            user=self.request.user,
+            organization_id=org_id
+        ).first()
+        if not requester_membership:
+            raise Http404
+
+        # Then fetch the target membership
+        membership = Membership.objects.filter(
+            id=membership_id,
+            organization_id=org_id
+        ).first()
+        if not membership:
+            raise Http404
+
+        return membership
+
+    def get_serializer_context(self):
+        # Pass org_id into serializer so validate_role can use it
+        context = super().get_serializer_context()
+        context['org_id'] = self.kwargs['org_id']
+        return context

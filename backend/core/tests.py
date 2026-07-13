@@ -75,3 +75,41 @@ class LoginResponseTest(TestCase):
 
         # Refresh token must still not appear in the JSON body
         self.assertNotIn('refresh', refresh_response.data)
+
+
+class MembershipPrivilegeEscalationTest(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Test Org")
+        self.admin_user = User.objects.create_user(
+            username='admin_user', password='pass123'
+        )
+        self.member_user = User.objects.create_user(
+            username='member_user', password='pass123'
+        )
+        Membership.objects.create(
+            user=self.admin_user, organization=self.org, role='admin'
+        )
+        self.member_membership = Membership.objects.create(
+            user=self.member_user, organization=self.org, role='member'
+        )
+        self.client = APIClient()
+
+    def test_member_cannot_escalate_own_role(self):
+        """A member attempting to set their own role to admin must be blocked."""
+        self.client.force_authenticate(user=self.member_user)
+        url = f'/api/v1/organizations/{self.org.id}/memberships/{self.member_membership.id}/'
+        response = self.client.patch(url, {'role': 'admin'}, format='json')
+        # Must be rejected — never 200
+        self.assertNotEqual(response.status_code, 200)
+        # Confirm the DB was not mutated
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, 'member')
+
+    def test_admin_can_change_member_role(self):
+        """An admin promoting a member is a legitimate operation."""
+        self.client.force_authenticate(user=self.admin_user)
+        url = f'/api/v1/organizations/{self.org.id}/memberships/{self.member_membership.id}/'
+        response = self.client.patch(url, {'role': 'admin'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, 'admin')

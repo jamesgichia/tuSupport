@@ -26,7 +26,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/leads/', include('leads.urls')),
     path('api/v1/', include('fundraisers.urls')),
-		
+		path('api/v1/', include('core.urls')),
+
     path('api/v1/auth/token/', ThrottledTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/auth/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
 ]
