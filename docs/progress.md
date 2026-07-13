@@ -1,43 +1,45 @@
-**Last updated:** Week 3, Day 5 — Friday Review closed
+**Last updated:** Week 4, Day 1 — Backend Day closed
 
 ---
 
-## Completed — Week 3, Day 5
+## Completed — Week 4, Day 1
 
-**Structured audit across all five layers — no regressions, two actionable gaps identified**
+**All Week 3 open gaps closed before new feature work began**
 
-**Database/Schema**
-- Tables confirmed: Organization, Membership (User ↔ Org join), Fundraiser, Leads
-- `unique_together` on Membership correctly prevents duplicate rows but does NOT prevent role field mutation by unprivileged users — Privilege Escalation (OWASP API6) remains open
+**Privilege Escalation (OWASP API6) — CLOSED**
 
-**Models/Multi-tenancy**
-- TenantManager fail-loud enforcement confirmed correct
-- Celery thread-local gap remains deferred per ADR-004
+- core/serializers.py created with MembershipSerializer
+- validate_role() blocks non-admin role writes at serializer level
+- Protection travels with the serializer, not tied to any single view
+- MembershipUpdateView (PATCH only) added to core/views.py
+- core/urls.py created and registered in tusupport/urls.py
+- 2 tests: member escalation blocked, admin promotion confirmed
 
-**API Views/Serializers**
-- Http404 (not Http403) on tenancy mismatch confirmed — prevents org existence enumeration
-- Flat `/api/v1/fundraisers/` route confirmed deleted (not just disabled) — attack surface removed
-- Detail endpoint `GET .../fundraisers/<id>/` not yet built — IDOR risk; test must be written before implementation
+**Fundraiser Detail Endpoint — IDOR CLOSED**
 
-**Auth/Authorization**
-- 15-min access token + HttpOnly refresh cookie confirmed correct
-- LoginRateThrottle covers single-IP brute force; distributed credential stuffing remains unmitigated (acceptable at current stage)
-- `secure=False` on refresh cookie confirmed — production blocker; requires HTTPS + `secure=True` before deployment
+- FundraiserDetailView added to fundraisers/views.py
+- Two-step tenant check: membership verified first, fundraiser scoped to org
+- 404 on all failure paths — never 403
+- Tests written before implementation
 
-**Tests**
-- 6/6 passing, confirmed clean
-- Gap 1: No role/permission tests — member attempting admin actions is untested
-- Gap 2: Detail endpoint IDOR test missing — must precede implementation (Week 4)
+**Contribution Management — backend complete**
 
----
+- Contribution model extends TenantScopedModel — isolation inherited automatically
+- on_delete=PROTECT on both FKs — financial records cannot be silently deleted
+- transaction_id unique=True — idempotency protection against duplicate M-Pesa callbacks
+- ContributionSerializer: validates amount > 0, fundraiser belongs to same org
+- ContributionListCreateView: members see own contributions, admins see all
+- URL: /api/v1/organizations/<org_id>/fundraisers/<fundraiser_id>/contributions/
+- 5 contribution tests covering create, validation, scoped listing, auth
 
-## Open items carried into Week 4
-
-- [ ] Privilege Escalation: protect Membership role field from unprivileged writes
-- [ ] Role/permission tests: member denied on admin-only actions
-- [ ] Detail endpoint: write failing IDOR test first, then implement
-- [ ] `secure=True` on refresh cookie before any production deployment
+**Test suite: 15/15 passing**
 
 ---
 
-## Week 3 complete
+## Open items carried into Week 4, Day 2 (Frontend)
+
+- [ ] Contribution UI — form to record a contribution
+- [ ] Contribution list view per fundraiser
+- [ ] secure=True on refresh cookie before any production deployment
+
+---
