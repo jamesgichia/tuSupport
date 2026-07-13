@@ -1,13 +1,15 @@
-# fundraisers/urls.py
-
 from django.urls import path
-from .views import FundraiserListCreateView
+from .views import FundraiserListCreateView, FundraiserDetailView
 
 urlpatterns = [
     path(
-        "organizations/<int:org_id>/fundraisers/",   # org_id captured from the URL itself
+        "organizations/<int:org_id>/fundraisers/",
         FundraiserListCreateView.as_view(),
         name="fundraiser-list-create",
     ),
-    # Old flat route is REMOVED — no more "unlocked door" left standing
+    path(
+        "organizations/<int:org_id>/fundraisers/<int:fundraiser_id>/",
+        FundraiserDetailView.as_view(),
+        name="fundraiser-detail",
+    ),
 ]

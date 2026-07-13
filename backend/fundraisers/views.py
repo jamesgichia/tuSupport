@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions, status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import Http404
 from .models import Fundraiser
@@ -56,3 +57,35 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
 
         output_serializer = self.get_serializer(instance)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class FundraiserDetailView(generics.RetrieveAPIView):
+    """
+    GET a single fundraiser by ID.
+    Tenant check happens first — if the requesting user doesn't belong
+    to the org in the URL, they get 404. Never 403.
+    If they do belong but the fundraiser belongs to a different org,
+    they also get 404 — the fundraiser is invisible to them.
+    """
+    serializer_class = FundraiserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        # Step 1 — verify requester belongs to the org declared in the URL
+        org_id = self.kwargs['org_id']
+        membership = self.request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if not membership:
+            raise Http404  # user doesn't belong here — reveal nothing
+
+        # Step 2 — fetch the fundraiser, scoped to this org
+        # If the fundraiser exists but belongs to a different org, this returns None → 404
+        fundraiser = Fundraiser.objects.filter(
+            id=self.kwargs['fundraiser_id'],
+            organization_id=org_id       # tenant scope enforced here
+        ).first()
+        if not fundraiser:
+            raise Http404
+
+        return fundraiser

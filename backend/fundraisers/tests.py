@@ -149,3 +149,53 @@ class RolePermissionTest(TestCase):
     def tearDown(self):
         # Always stop the patcher — never leave mocks running
         self.throttle_patcher.stop()
+
+
+class FundraiserDetailIDORTest(TestCase):
+    def setUp(self):
+        # Org A — legitimate owner
+        self.org_a = Organization.objects.create(name="Org A")
+        self.user_a = User.objects.create_user(
+            username='user_a', password='pass123'
+        )
+        Membership.objects.create(
+            user=self.user_a, organization=self.org_a, role='admin'
+        )
+        self.fundraiser = Fundraiser.objects.create(
+            organization=self.org_a,
+            title="Org A Fundraiser",
+            description="Private to Org A",
+            goal_amount=10000,
+            status='draft'
+        )
+
+        # Org B — the attacker
+        self.org_b = Organization.objects.create(name="Org B")
+        self.user_b = User.objects.create_user(
+            username='user_b', password='pass123'
+        )
+        Membership.objects.create(
+            user=self.user_b, organization=self.org_b, role='member'
+        )
+        self.client = APIClient()
+
+    def test_user_cannot_access_other_org_fundraiser(self):
+        """
+        User B must not be able to read User A's fundraiser —
+        even if they know the fundraiser ID.
+        Correct response is 404 — never 200, never 403.
+        404 denies resource existence; 403 confirms it.
+        """
+        self.client.force_authenticate(user=self.user_b)
+        url = f'/api/v1/organizations/{self.org_a.id}/fundraisers/{self.fundraiser.id}/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_owner_can_access_own_fundraiser(self):
+        """
+        User A can read their own fundraiser — happy path must still work.
+        """
+        self.client.force_authenticate(user=self.user_a)
+        url = f'/api/v1/organizations/{self.org_a.id}/fundraisers/{self.fundraiser.id}/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
