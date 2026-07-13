@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import FundraiserListCreateView, FundraiserDetailView
+from .views import FundraiserListCreateView, FundraiserDetailView, ContributionListCreateView
 
 urlpatterns = [
     path(
@@ -11,5 +11,10 @@ urlpatterns = [
         "organizations/<int:org_id>/fundraisers/<int:fundraiser_id>/",
         FundraiserDetailView.as_view(),
         name="fundraiser-detail",
+    ),
+    path(
+        "organizations/<int:org_id>/fundraisers/<int:fundraiser_id>/contributions/",
+        ContributionListCreateView.as_view(),
+        name="contribution-list-create",
     ),
 ]

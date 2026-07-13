@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from core.models import Organization, Membership
-from fundraisers.models import Fundraiser
+from fundraisers.models import Fundraiser, Contribution
 from core.throttles import LoginRateThrottle
 from unittest.mock import patch
 
@@ -199,3 +199,100 @@ class FundraiserDetailIDORTest(TestCase):
         url = f'/api/v1/organizations/{self.org_a.id}/fundraisers/{self.fundraiser.id}/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+
+
+class ContributionTests(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Test Org")
+        self.admin_user = User.objects.create_user(
+            username='contrib_admin', password='pass123'
+        )
+        self.member_user = User.objects.create_user(
+            username='contrib_member', password='pass123'
+        )
+        Membership.objects.create(
+            user=self.admin_user, organization=self.org, role='admin'
+        )
+        Membership.objects.create(
+            user=self.member_user, organization=self.org, role='member'
+        )
+        self.fundraiser = Fundraiser.objects.create(
+            organization=self.org,
+            title="Test Fundraiser",
+            description="For testing",
+            goal_amount=50000,
+            status='draft'
+        )
+        self.client = APIClient()
+        self.url = f'/api/v1/organizations/{self.org.id}/fundraisers/{self.fundraiser.id}/contributions/'
+
+    def test_member_can_create_contribution(self):
+        """Any org member can record a contribution."""
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.post(self.url, {
+            'fundraiser': self.fundraiser.id,
+            'amount': '500.00',
+            'payment_method': 'manual'
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_contribution_amount_must_be_positive(self):
+        """Zero or negative amounts must be rejected."""
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.post(self.url, {
+            'fundraiser': self.fundraiser.id,
+            'amount': '0.00',
+            'payment_method': 'manual'
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_member_sees_only_own_contributions(self):
+        """A member listing contributions sees only their own."""
+        # Admin contributes
+        Contribution.objects.create(
+            organization=self.org,
+            fundraiser=self.fundraiser,
+            contributor=self.admin_user,
+            amount=1000,
+            payment_method='manual'
+        )
+        # Member contributes
+        Contribution.objects.create(
+            organization=self.org,
+            fundraiser=self.fundraiser,
+            contributor=self.member_user,
+            amount=500,
+            payment_method='manual'
+        )
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        # Member must only see their own single contribution
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['amount'], '500.00')
+
+    def test_admin_sees_all_contributions(self):
+        """An admin listing contributions sees everyone's."""
+        Contribution.objects.create(
+            organization=self.org,
+            fundraiser=self.fundraiser,
+            contributor=self.admin_user,
+            amount=1000,
+            payment_method='manual'
+        )
+        Contribution.objects.create(
+            organization=self.org,
+            fundraiser=self.fundraiser,
+            contributor=self.member_user,
+            amount=500,
+            payment_method='manual'
+        )
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+
+    def test_unauthenticated_user_cannot_access_contributions(self):
+        """No JWT, no access."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 401)

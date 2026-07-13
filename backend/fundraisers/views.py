@@ -2,8 +2,8 @@ from rest_framework import generics, permissions, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import Http404
-from .models import Fundraiser
-from .serializers import FundraiserSerializer
+from .models import Fundraiser, Contribution
+from .serializers import FundraiserSerializer, ContributionSerializer
 from core.models import Membership
 
 
@@ -89,3 +89,58 @@ class FundraiserDetailView(generics.RetrieveAPIView):
             raise Http404
 
         return fundraiser
+
+
+class ContributionListCreateView(generics.ListCreateAPIView):
+    """
+    GET  — list contributions for a fundraiser (tenant-scoped)
+    POST — record a new contribution (any authenticated org member)
+    
+    Admin sees all contributions for the fundraiser.
+    Member sees only their own contributions.
+    """
+    serializer_class = ContributionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_membership_or_404(self):
+        """Reuse the same tenant enforcement pattern as FundraiserListCreateView."""
+        org_id = self.kwargs['org_id']
+        membership = self.request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if not membership:
+            raise Http404
+        return membership
+
+    def get_queryset(self):
+        membership = self.get_membership_or_404()
+        fundraiser_id = self.kwargs['fundraiser_id']
+
+        # Verify fundraiser belongs to this org before listing contributions
+        fundraiser = Fundraiser.objects.filter(
+            id=fundraiser_id,
+            organization=membership.organization
+        ).first()
+        if not fundraiser:
+            raise Http404
+
+        qs = Contribution.objects.filter(fundraiser=fundraiser)
+
+        # Admins see all contributions; members see only their own
+        if membership.role != Membership.Role.ADMIN:
+            qs = qs.filter(contributor=self.request.user)
+
+        return qs
+
+    def get_serializer_context(self):
+        """Pass org_id into serializer so validate_fundraiser can use it."""
+        context = super().get_serializer_context()
+        context['org_id'] = self.kwargs['org_id']
+        return context
+
+    def perform_create(self, serializer):
+        membership = self.get_membership_or_404()
+        serializer.save(
+            contributor=self.request.user,
+            organization=membership.organization
+        )
