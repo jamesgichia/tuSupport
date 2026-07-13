@@ -1,63 +1,43 @@
-**Last updated:** Week 3, Day 4 — Thursday Security & Hardening closed
+**Last updated:** Week 3, Day 5 — Friday Review closed
 
 ---
 
-## Completed — Week 3, Day 4
+## Completed — Week 3, Day 5
 
-**ADR-008 implemented — Refresh token moved to HttpOnly cookie**
+**Structured audit across all five layers — no regressions, two actionable gaps identified**
 
-- `ThrottledTokenObtainPairView` updated — strips `refresh` from JSON response body and sets it as an `HttpOnly; SameSite=Strict` cookie scoped to `Path=/api/v1/auth/token/refresh/` only
-- `CookieTokenRefreshView` added — reads refresh token from `request.COOKIES` instead of request body; frontend sends an empty POST, browser attaches the cookie automatically
-- Token rotation (`ROTATE_REFRESH_TOKENS=True`) handled correctly — rotated refresh token updates the cookie on every successful refresh call; old token replaced, never left dangling
-- `CORS_ALLOW_CREDENTIALS = True` added to `settings.py` — required for the browser to accept `Set-Cookie` headers on cross-origin requests (frontend port 3000 → backend port 8000)
-- Login page (`/login/page.tsx`) — removed `sessionStorage.setItem("refresh_token", ...)` entirely; frontend never sees the refresh token again
-- `credentials: "include"` added to the login `fetch()` call — tells the browser to accept and store the cookie Django sets in the login response
-- `frontend/src/lib/axios.ts` updated — refresh call now sends empty POST body with `withCredentials: true`; browser handles the cookie transparently
+**Database/Schema**
+- Tables confirmed: Organization, Membership (User ↔ Org join), Fundraiser, Leads
+- `unique_together` on Membership correctly prevents duplicate rows but does NOT prevent role field mutation by unprivileged users — Privilege Escalation (OWASP API6) remains open
+
+**Models/Multi-tenancy**
+- TenantManager fail-loud enforcement confirmed correct
+- Celery thread-local gap remains deferred per ADR-004
+
+**API Views/Serializers**
+- Http404 (not Http403) on tenancy mismatch confirmed — prevents org existence enumeration
+- Flat `/api/v1/fundraisers/` route confirmed deleted (not just disabled) — attack surface removed
+- Detail endpoint `GET .../fundraisers/<id>/` not yet built — IDOR risk; test must be written before implementation
+
+**Auth/Authorization**
+- 15-min access token + HttpOnly refresh cookie confirmed correct
+- LoginRateThrottle covers single-IP brute force; distributed credential stuffing remains unmitigated (acceptable at current stage)
+- `secure=False` on refresh cookie confirmed — production blocker; requires HTTPS + `secure=True` before deployment
 
 **Tests**
-
-- `test_login_sets_httponly_refresh_cookie` — verifies `refresh` absent from JSON, cookie present, `HttpOnly` flag set, `SameSite=Strict` set, `Path` scoped to refresh endpoint only
-- `test_refresh_endpoint_reads_cookie_and_returns_new_access_token` — verifies full refresh flow: cookie planted on login, empty POST to refresh endpoint returns new access token, rotated cookie set, `refresh` absent from JSON
-- Total passing tests: **6/6**
-
-**Verified live**
-
-- `curl` login confirmed: `Set-Cookie` header present, `refresh` absent from JSON body, `access` and `organizations` returned correctly
-- `curl` refresh confirmed: new `access` token returned, new `refresh_token` cookie set (rotation working), `refresh` absent from JSON body
+- 6/6 passing, confirmed clean
+- Gap 1: No role/permission tests — member attempting admin actions is untested
+- Gap 2: Detail endpoint IDOR test missing — must precede implementation (Week 4)
 
 ---
 
-## Key principles reinforced today
+## Open items carried into Week 4
 
-- `HttpOnly` makes the refresh token invisible to JavaScript entirely — XSS cannot steal what JS cannot read
-- `SameSite=Strict` closes the CSRF vector that HttpOnly cookies introduce — browser refuses to send the cookie on any cross-origin request
-- Scoping the cookie to `Path=/api/v1/auth/token/refresh/` means the cookie is not sent on every API request — minimises exposure surface
-- `secure=False` is deliberately set for dev only — this must flip to `True` before any production deployment (requires HTTPS)
-- `CORS_ALLOW_CREDENTIALS=True` is a required pairing with `withCredentials: true` on the frontend — either side alone is not enough; both must be set
-
----
-
-## Deferred
-
-- `secure=True` on the refresh cookie — requires HTTPS; must be set before production deployment
-- CSRF middleware wiring for any future state-mutating cookie-based flows
-- Detail endpoint `GET /api/v1/organizations/<org_id>/fundraisers/<id>/` — carries same IDOR risk as list endpoint; write the failing test first, then implement
+- [ ] Privilege Escalation: protect Membership role field from unprivileged writes
+- [ ] Role/permission tests: member denied on admin-only actions
+- [ ] Detail endpoint: write failing IDOR test first, then implement
+- [ ] `secure=True` on refresh cookie before any production deployment
 
 ---
 
-## Completed this week (Week 3 summary)
-
-| Day | Focus | Status |
-|---|---|---|
-| Monday | Backend — login response returns org list with roles | ✅ Done |
-| Tuesday | Frontend — org picker flow (`/login`, `/pick-org`, `/dashboard/[orgId]`) | ✅ Done |
-| Wednesday | Integration — Axios interceptor, token refresh, live flow verified | ✅ Done |
-| Thursday | Security — ADR-008 HttpOnly cookie, 2 new tests, 6/6 passing | ✅ Done |
-
----
-
-## Next up — Week 3, Day 5 (Friday Review)
-
-- Structured audit across all five layers: Database/Schema, Models/Multi-tenancy, API Views/Serializers, Auth/Authorization, Tests
-- Confirm no remaining scope.md §10 violations before Week 4
-- Identify anything that must land before Week 4 begins
+## Week 3 complete
