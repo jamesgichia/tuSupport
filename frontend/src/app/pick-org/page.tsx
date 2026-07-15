@@ -23,8 +23,8 @@ export default function PickOrgPage() {
   }, [router]);
 
   function handleSelect(orgId: number) {
-    router.push(`/dashboard/${orgId}`);
-  }
+    router.push(`/dashboard/organizations/${orgId}/fundraisers`);
+}
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">

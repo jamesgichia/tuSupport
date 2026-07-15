@@ -74,7 +74,6 @@ export default function ContributionsPage({ params }: PageProps) {
 					amount: amount,
 					payment_method: paymentMethod,
 					transaction_id: transactionId || undefined,
-					fundraiser: parseInt(fundraiserId),
 				},
 			);
 
@@ -115,12 +114,6 @@ export default function ContributionsPage({ params }: PageProps) {
 				</h2>
 
 				<div className='space-y-3'>
-					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>
-							Contributor Name
-						</label>
-					</div>
-
 					<div>
 						<label className='block text-sm font-medium text-gray-700 mb-1'>
 							Amount (KES)
