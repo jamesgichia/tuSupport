@@ -1,45 +1,32 @@
-**Last updated:** Week 4, Day 1 — Backend Day closed
+**Last updated:** Week 4, Day 2 — Frontend Day closed
 
 ---
 
-## Completed — Week 4, Day 1
+## Completed — Week 4, Day 2
 
-**All Week 3 open gaps closed before new feature work began**
+**Contribution UI — complete**
 
-**Privilege Escalation (OWASP API6) — CLOSED**
+- Route: /dashboard/organizations/[orgId]/fundraisers/[fundraiserId]/contributions
+- Both IDs explicit in URL — org context not reliant on session state (IDOR protection)
+- Next.js 15 params unwrapped via React use() — params is now a Promise in Next.js 15
+- Contribution form: amount, payment method, transaction ID
+- contributor_name field removed — backend links contributor to authenticated user ID
+- fundraiser injected into POST body from URL param (frontend workaround — see hardening item)
+- Contribution list renders in reverse chronological order
+- Axios interceptor handles auth transparently — unauthenticated users redirected to login
 
-- core/serializers.py created with MembershipSerializer
-- validate_role() blocks non-admin role writes at serializer level
-- Protection travels with the serializer, not tied to any single view
-- MembershipUpdateView (PATCH only) added to core/views.py
-- core/urls.py created and registered in tusupport/urls.py
-- 2 tests: member escalation blocked, admin promotion confirmed
+**Known gaps logged:**
 
-**Fundraiser Detail Endpoint — IDOR CLOSED**
-
-- FundraiserDetailView added to fundraisers/views.py
-- Two-step tenant check: membership verified first, fundraiser scoped to org
-- 404 on all failure paths — never 403
-- Tests written before implementation
-
-**Contribution Management — backend complete**
-
-- Contribution model extends TenantScopedModel — isolation inherited automatically
-- on_delete=PROTECT on both FKs — financial records cannot be silently deleted
-- transaction_id unique=True — idempotency protection against duplicate M-Pesa callbacks
-- ContributionSerializer: validates amount > 0, fundraiser belongs to same org
-- ContributionListCreateView: members see own contributions, admins see all
-- URL: /api/v1/organizations/<org_id>/fundraisers/<fundraiser_id>/contributions/
-- 5 contribution tests covering create, validation, scoped listing, auth
-
-**Test suite: 15/15 passing**
+- Backend perform_create() should inject fundraiser from URL rather than requiring it
+  in POST body — currently a frontend workaround, creates minor inconsistency risk
+- contributor_name gap: no mechanism to record cash contributions from unregistered
+  community members — core harambee use case, needs Phase 2 solution
+- secure=True on refresh cookie still pending HTTPS setup
 
 ---
 
-## Open items carried into Week 4, Day 2 (Frontend)
+## Open items carried into Week 4, Day 3 (Integration Day)
 
-- [ ] Contribution UI — form to record a contribution
-- [ ] Contribution list view per fundraiser
-- [ ] secure=True on refresh cookie before any production deployment
-
----
+- [ ] Wire org picker to pass orgId into dashboard navigation
+- [ ] Backend hardening: perform_create() injecting fundraiser from URL
+- [ ] Fundraiser list page so users can navigate to contributions naturally
