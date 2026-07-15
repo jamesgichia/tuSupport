@@ -95,7 +95,7 @@ class ContributionListCreateView(generics.ListCreateAPIView):
     """
     GET  — list contributions for a fundraiser (tenant-scoped)
     POST — record a new contribution (any authenticated org member)
-    
+
     Admin sees all contributions for the fundraiser.
     Member sees only their own contributions.
     """
@@ -140,7 +140,17 @@ class ContributionListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         membership = self.get_membership_or_404()
+
+        # Read fundraiser intent from URL — never trust the POST body for this
+        fundraiser = Fundraiser.objects.filter(
+            id=self.kwargs['fundraiser_id'],
+            organization=membership.organization  # tenant scope enforced here
+        ).first()
+        if not fundraiser:
+            raise Http404  # fundraiser doesn't exist in this org — reveal nothing
+
         serializer.save(
             contributor=self.request.user,
-            organization=membership.organization
+            organization=membership.organization,
+            fundraiser=fundraiser  # injected server-side, not from client
         )
