@@ -296,3 +296,64 @@ class ContributionTests(TestCase):
         """No JWT, no access."""
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 401)
+
+    def test_fundraiser_injection_in_body_is_ignored(self):
+        """
+        Attacker sends a foreign org's fundraiser ID in the POST body.
+        The view must ignore it and bind to the fundraiser from the URL.
+        The contribution must land on the correct fundraiser, not the injected one.
+        """
+        # Create a foreign org and fundraiser the authenticated user has no access to
+        foreign_org = Organization.objects.create(name="Foreign Org")
+        foreign_fundraiser = Fundraiser._base_manager.create(
+            organization=foreign_org,
+            title="Foreign Fundraiser",
+            goal_amount=99999,
+            status='published',
+        )
+
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.post(self.url, {
+            'amount': '500.00',
+            'payment_method': 'manual',
+            'fundraiser': foreign_fundraiser.id,  # injected — must be silently ignored
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+
+        # The contribution must be bound to the URL's fundraiser, not the injected one
+        created = Contribution.objects.filter(contributor=self.member_user).latest('id')
+        self.assertEqual(created.fundraiser, self.fundraiser)
+        self.assertNotEqual(created.fundraiser, foreign_fundraiser)
+
+    def test_non_member_cannot_post_contribution(self):
+        """
+        A valid authenticated user who is NOT a member of this org
+        must be refused at the contributions endpoint.
+        Expected: 404 — we never confirm the resource exists to outsiders.
+        """
+        outsider = User.objects.create_user(
+            username='outsider', password='pass123'
+        )
+
+        self.client.force_authenticate(user=outsider)
+        response = self.client.post(self.url, {
+            'amount': '500.00',
+            'payment_method': 'manual',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_non_member_cannot_list_contributions(self):
+        """
+        Same outsider, hitting GET instead of POST.
+        Must also return 404 — list and create share the same tenancy gate.
+        """
+        outsider = User.objects.create_user(
+            username='outsider_list', password='pass123'
+        )
+
+        self.client.force_authenticate(user=outsider)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 404)
