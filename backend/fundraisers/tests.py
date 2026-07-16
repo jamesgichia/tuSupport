@@ -357,3 +357,34 @@ class ContributionTests(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 404)
+
+
+class FundraiserCreationRoleTest(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Role Test Org")
+        self.admin = User.objects.create_user(username='frole_admin', password='pass123')
+        self.member = User.objects.create_user(username='frole_member', password='pass123')
+        Membership.objects.create(user=self.admin, organization=self.org, role='admin')
+        Membership.objects.create(user=self.member, organization=self.org, role='member')
+        self.client = APIClient()
+        self.url = f'/api/v1/organizations/{self.org.id}/fundraisers/'
+
+    def test_admin_can_create_fundraiser(self):
+        """Admin role must be permitted to create fundraisers."""
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(self.url, {
+            'title': 'Admin Fundraiser',
+            'description': 'Created by admin',
+            'goal_amount': '10000.00',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_member_cannot_create_fundraiser(self):
+        """Plain member must be blocked from creating fundraisers."""
+        self.client.force_authenticate(user=self.member)
+        response = self.client.post(self.url, {
+            'title': 'Member Fundraiser',
+            'description': 'Should be blocked',
+            'goal_amount': '10000.00',
+        }, format='json')
+        self.assertEqual(response.status_code, 403)
