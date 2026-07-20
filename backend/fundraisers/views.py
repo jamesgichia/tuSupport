@@ -1,7 +1,8 @@
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.http import Http404
 from .models import Fundraiser, Contribution
 from .serializers import FundraiserSerializer, ContributionSerializer
@@ -12,27 +13,26 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
     serializer_class = FundraiserSerializer
 
     def get_membership_or_404(self):
-        """
-        Single source of truth for the org check.
-        Reads org_id from the URL, verifies the user
-        actually belongs to it. Returns membership or
-        raises 404 — never 403 (don't confirm org exists).
-        """
-        org_id = self.kwargs["org_id"]  # declared intent from URL
+        org_id = self.kwargs["org_id"]
         membership = self.request.user.membership_set.filter(
             organization_id=org_id
         ).first()
         if membership is None:
-            raise Http404  # attacker learns nothing
+            raise Http404
         return membership
 
     def get_queryset(self):
         if not self.request.user.is_authenticated:
             return Fundraiser._base_manager.none()
-        membership = self.get_membership_or_404()  # verified, not assumed
-        return Fundraiser.objects.for_org(
-            membership.organization
-        ).filter(status='published')
+        membership = self.get_membership_or_404()
+        qs = Fundraiser.objects.for_org(membership.organization)
+
+        # Admins see everything (draft, published, closed)
+        # Members only see published fundraisers
+        if membership.role != Membership.Role.ADMIN:
+            qs = qs.filter(status=Fundraiser.Status.PUBLISHED)
+
+        return qs
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -42,16 +42,14 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         membership = self.get_membership_or_404()
 
-        # Role check — members can read, only admins can write
         if membership.role != Membership.Role.ADMIN:
             raise PermissionDenied("Only organisation admins can create fundraisers.")
 
         instance = Fundraiser(
             organization=membership.organization,
-            status='draft',
+            status=Fundraiser.Status.DRAFT,
             **serializer.validated_data
         )
         instance.save()
@@ -61,30 +59,20 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
 
 
 class FundraiserDetailView(generics.RetrieveAPIView):
-    """
-    GET a single fundraiser by ID.
-    Tenant check happens first — if the requesting user doesn't belong
-    to the org in the URL, they get 404. Never 403.
-    If they do belong but the fundraiser belongs to a different org,
-    they also get 404 — the fundraiser is invisible to them.
-    """
     serializer_class = FundraiserSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        # Step 1 — verify requester belongs to the org declared in the URL
         org_id = self.kwargs['org_id']
         membership = self.request.user.membership_set.filter(
             organization_id=org_id
         ).first()
         if not membership:
-            raise Http404  # user doesn't belong here — reveal nothing
+            raise Http404
 
-        # Step 2 — fetch the fundraiser, scoped to this org
-        # If the fundraiser exists but belongs to a different org, this returns None → 404
         fundraiser = Fundraiser.objects.filter(
             id=self.kwargs['fundraiser_id'],
-            organization_id=org_id       # tenant scope enforced here
+            organization_id=org_id
         ).first()
         if not fundraiser:
             raise Http404
@@ -92,19 +80,94 @@ class FundraiserDetailView(generics.RetrieveAPIView):
         return fundraiser
 
 
-class ContributionListCreateView(generics.ListCreateAPIView):
+class PublishFundraiserView(APIView):
     """
-    GET  — list contributions for a fundraiser (tenant-scoped)
-    POST — record a new contribution (any authenticated org member)
+    POST /organizations/<org_id>/fundraisers/<fundraiser_id>/publish/
+    Admin-only. Moves a fundraiser from draft → published.
+    Rejects any other starting state.
+    """
+    permission_classes = [IsAuthenticated]
 
-    Admin sees all contributions for the fundraiser.
-    Member sees only their own contributions.
+    def post(self, request, org_id, fundraiser_id):
+        # Step 1 — verify membership and admin role
+        membership = request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if not membership:
+            raise Http404
+        if membership.role != Membership.Role.ADMIN:
+            raise PermissionDenied("Only admins can publish fundraisers.")
+
+        # Step 2 — fetch fundraiser scoped to this org
+        fundraiser = Fundraiser.objects.filter(
+            id=fundraiser_id,
+            organization=membership.organization
+        ).first()
+        if not fundraiser:
+            raise Http404
+
+        # Step 3 — enforce valid transition: only draft → published is allowed
+        if fundraiser.status != Fundraiser.Status.DRAFT:
+            raise ValidationError(
+                f"Cannot publish a fundraiser with status '{fundraiser.status}'. "
+                "Only draft fundraisers can be published."
+            )
+
+        fundraiser.status = Fundraiser.Status.PUBLISHED
+        fundraiser.save()
+
+        return Response(
+            FundraiserSerializer(fundraiser).data,
+            status=status.HTTP_200_OK
+        )
+
+
+class CloseFundraiserView(APIView):
     """
+    POST /organizations/<org_id>/fundraisers/<fundraiser_id>/close/
+    Admin-only. Moves a fundraiser from published → closed.
+    Closed is a terminal state — it cannot be undone.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, org_id, fundraiser_id):
+        membership = request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if not membership:
+            raise Http404
+        if membership.role != Membership.Role.ADMIN:
+            raise PermissionDenied("Only admins can close fundraisers.")
+
+        fundraiser = Fundraiser.objects.filter(
+            id=fundraiser_id,
+            organization=membership.organization
+        ).first()
+        if not fundraiser:
+            raise Http404
+
+        # Only published fundraisers can be closed
+        # A draft that was never live cannot be "closed" — it should just be deleted
+        if fundraiser.status != Fundraiser.Status.PUBLISHED:
+            raise ValidationError(
+                f"Cannot close a fundraiser with status '{fundraiser.status}'. "
+                "Only published fundraisers can be closed."
+            )
+
+        fundraiser.status = Fundraiser.Status.CLOSED
+        fundraiser.save()
+
+        return Response(
+            FundraiserSerializer(fundraiser).data,
+            status=status.HTTP_200_OK
+        )
+
+
+class ContributionListCreateView(generics.ListCreateAPIView):
     serializer_class = ContributionSerializer
     permission_classes = [IsAuthenticated]
 
     def get_membership_or_404(self):
-        """Reuse the same tenant enforcement pattern as FundraiserListCreateView."""
         org_id = self.kwargs['org_id']
         membership = self.request.user.membership_set.filter(
             organization_id=org_id
@@ -117,7 +180,6 @@ class ContributionListCreateView(generics.ListCreateAPIView):
         membership = self.get_membership_or_404()
         fundraiser_id = self.kwargs['fundraiser_id']
 
-        # Verify fundraiser belongs to this org before listing contributions
         fundraiser = Fundraiser.objects.filter(
             id=fundraiser_id,
             organization=membership.organization
@@ -127,14 +189,12 @@ class ContributionListCreateView(generics.ListCreateAPIView):
 
         qs = Contribution.objects.filter(fundraiser=fundraiser)
 
-        # Admins see all contributions; members see only their own
         if membership.role != Membership.Role.ADMIN:
             qs = qs.filter(contributor=self.request.user)
 
         return qs
 
     def get_serializer_context(self):
-        """Pass org_id into serializer so validate_fundraiser can use it."""
         context = super().get_serializer_context()
         context['org_id'] = self.kwargs['org_id']
         return context
@@ -142,16 +202,24 @@ class ContributionListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         membership = self.get_membership_or_404()
 
-        # Read fundraiser intent from URL — never trust the POST body for this
         fundraiser = Fundraiser.objects.filter(
             id=self.kwargs['fundraiser_id'],
-            organization=membership.organization  # tenant scope enforced here
+            organization=membership.organization
         ).first()
         if not fundraiser:
-            raise Http404  # fundraiser doesn't exist in this org — reveal nothing
+            raise Http404
+
+        # State machine guard — contributions only accepted on live fundraisers
+        # A draft hasn't launched; a closed fundraiser has reconciled.
+        # Accepting money in either state would corrupt the audit trail.
+        if fundraiser.status != Fundraiser.Status.PUBLISHED:
+            raise ValidationError(
+                f"This fundraiser is not accepting contributions "
+                f"(current status: '{fundraiser.status}')."
+            )
 
         serializer.save(
             contributor=self.request.user,
             organization=membership.organization,
-            fundraiser=fundraiser  # injected server-side, not from client
+            fundraiser=fundraiser
         )

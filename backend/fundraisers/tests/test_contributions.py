@@ -166,7 +166,7 @@ class FundraiserDetailIDORTest(TestCase):
             title="Org A Fundraiser",
             description="Private to Org A",
             goal_amount=10000,
-            status='draft'
+            status='published'
         )
 
         # Org B — the attacker
@@ -221,7 +221,7 @@ class ContributionTests(TestCase):
             title="Test Fundraiser",
             description="For testing",
             goal_amount=50000,
-            status='draft'
+            status='published'
         )
         self.client = APIClient()
         self.url = f'/api/v1/organizations/{self.org.id}/fundraisers/{self.fundraiser.id}/contributions/'
