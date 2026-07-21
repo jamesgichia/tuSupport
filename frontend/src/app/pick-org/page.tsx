@@ -22,9 +22,13 @@ export default function PickOrgPage() {
     setOrgs(JSON.parse(stored));
   }, [router]);
 
-  function handleSelect(orgId: number) {
-    router.push(`/dashboard/organizations/${orgId}/fundraisers`);
-}
+  function handleSelect(org: Org) {
+    // Persist the selected org's role — used by dashboard pages for UX controls
+    // This is a UX control only — backend re-validates role on every request
+    sessionStorage.setItem("current_role", org.role);
+    sessionStorage.setItem("current_org_name", org.name);
+    router.push(`/dashboard/organizations/${org.id}/fundraisers`);
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
@@ -49,7 +53,7 @@ export default function PickOrgPage() {
           {orgs.map((org) => (
             <button
               key={org.id}
-              onClick={() => handleSelect(org.id)}
+              onClick={() => handleSelect(org)}
               className="w-full flex items-center justify-between bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-md px-4 py-3 transition-colors group"
             >
               <span className="text-sm font-medium text-white group-hover:text-emerald-400 transition-colors">
