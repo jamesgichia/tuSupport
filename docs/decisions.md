@@ -90,6 +90,39 @@
 **Consequence:** Current localStorage implementation for the refresh token is explicitly temporary. Must be replaced before any production deployment or payment integration begins (Phase 3 at the latest).
 **Tradeoff accepted:** Until the backend change is made, the refresh token remains exposed to XSS. Acceptable at current stage — no real user data, no payment integration yet. Not acceptable past Phase 2.
 
+
+## ADR-009: UI theming — CSS custom properties token system over
+
+hardcoded Tailwind values
+
+**Date:** Week 5, Day 2
+**Decision:** Define all colours as CSS custom properties (variables)
+in globals.css, extended into Tailwind via the theme config. Brand
+colours are declared once and never repeated. Surface and text colours
+are declared twice — once under :root (light mode) and once under
+[data-theme="dark"] (dark mode).
+**Options considered:**
+
+- **Hardcoded Tailwind classes** (e.g. `bg-teal-600` directly in
+  components) — rejected. Changing the brand colour later requires
+  hunting every component. No single source of truth. Dark mode
+  requires per-component overrides via `dark:` prefix, which scales
+  poorly.
+- **CSS custom properties token system (chosen)** — one edit in
+  globals.css propagates to every component. Dark mode is a single
+  `[data-theme="dark"]` attribute on the `<html>` tag. Brand colours
+  never change between modes; only surfaces and text colours flip.
+
+**Consequence:** All components must reference token classes
+(`text-brand-primary`, `bg-surface-card`) not raw colour classes
+(`text-teal-600`, `bg-white`). Raw colour classes are permitted only
+inside globals.css itself where the tokens are defined.
+**Tradeoff accepted:** Requires upfront wiring of tailwind.config.ts
+and globals.css before components can use the token system. Until that
+wiring is done (Week 5, Day 3), components use interim hardcoded
+classes — a known temporary state, not a pattern to replicate.
+
+
 ## Environment notes (non-architectural, but worth remembering)
 
 - PostgreSQL 18+ Docker images require the data volume mounted at the parent directory `/var/lib/postgresql`, not the old-style `/var/lib/postgresql/data` — this supports version-namespaced data directories for future `pg_upgrade` operations.
