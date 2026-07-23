@@ -1,26 +1,89 @@
 @import "tailwindcss";
 
+/* ============================================
+   BRAND TOKENS — never change between modes
+   ============================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+	--brand-primary: #0D9488;
+	--brand-accent: #F59E0B;
+	--brand-success: #22C55E;
+	--brand-danger: #EF4444;
+	--brand-info: #3B82F6;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ============================================
+   LIGHT MODE — default
+   ============================================ */
+:root {
+	--surface-bg: #F9FAFB;
+	--surface-card: #FFFFFF;
+	--surface-elevated: #F1F5F9;
+	--surface-border: #E2E8F0;
+
+	--text-primary: #0F172A;
+	--text-secondary: #475569;
+	--text-muted: #94A3B8;
 }
 
+/* ============================================
+   DARK MODE — media query (OS/browser setting)
+   ============================================ */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+	:root {
+		--surface-bg: #0F172A;
+		--surface-card: #1E293B;
+		--surface-elevated: #334155;
+		--surface-border: #475569;
+
+		--text-primary: #F8FAFC;
+		--text-secondary: #CBD5E1;
+		--text-muted: #64748B;
+	}
 }
 
+/* ============================================
+   DARK MODE — manual toggle (future use)
+   ============================================ */
+[data-theme="dark"] {
+	--surface-bg: #0F172A;
+	--surface-card: #1E293B;
+	--surface-elevated: #334155;
+	--surface-border: #475569;
+
+	--text-primary: #F8FAFC;
+	--text-secondary: #CBD5E1;
+	--text-muted: #64748B;
+}
+
+/* ============================================
+   TAILWIND v4 THEME BRIDGE
+   Maps CSS vars into Tailwind utility classes
+   ============================================ */
+@theme inline {
+	--color-brand-primary: var(--brand-primary);
+	--color-brand-accent: var(--brand-accent);
+	--color-brand-success: var(--brand-success);
+	--color-brand-danger: var(--brand-danger);
+	--color-brand-info: var(--brand-info);
+
+	--color-surface-bg: var(--surface-bg);
+	--color-surface-card: var(--surface-card);
+	--color-surface-elevated: var(--surface-elevated);
+	--color-surface-border: var(--surface-border);
+
+	--color-text-primary: var(--text-primary);
+	--color-text-secondary: var(--text-secondary);
+	--color-text-muted: var(--text-muted);
+
+	--font-sans: var(--font-geist-sans);
+	--font-mono: var(--font-geist-mono);
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+	background: var(--surface-bg);
+	color: var(--text-primary);
+	font-family: Arial, Helvetica, sans-serif;
 }

@@ -99,23 +99,23 @@ export default function ContributionsPage({ params }: PageProps) {
 		<div className='max-w-2xl mx-auto p-6 space-y-8'>
 			{/* Page header */}
 			<div>
-				<h1 className='text-2xl font-bold text-gray-900'>
+				<h1 className='text-2xl font-bold text-text-primary'>
 					Contributions
 				</h1>
-				<p className='text-sm text-gray-500 mt-1'>
+				<p className='text-sm text-text-secondary mt-1'>
 					Fundraiser #{fundraiserId} · Organization #{orgId}
 				</p>
 			</div>
 
 			{/* Contribution form */}
-			<div className='bg-white border border-gray-200 rounded-lg p-6 space-y-4'>
-				<h2 className='text-lg font-semibold text-gray-800'>
+			<div className='bg-surface-card border border-surface-border rounded-lg p-6 space-y-4'>
+				<h2 className='text-lg font-semibold text-text-primary'>
 					Record a Contribution
 				</h2>
 
 				<div className='space-y-3'>
 					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>
+						<label className='block text-sm font-medium text-text-secondary mb-1'>
 							Amount (KES)
 						</label>
 						<input
@@ -124,18 +124,18 @@ export default function ContributionsPage({ params }: PageProps) {
 							onChange={(e) => setAmount(e.target.value)}
 							placeholder='e.g. 500'
 							min='1'
-							className='w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 						/>
 					</div>
 
 					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>
+						<label className='block text-sm font-medium text-text-secondary mb-1'>
 							Payment Method
 						</label>
 						<select
 							value={paymentMethod}
 							onChange={(e) => setPaymentMethod(e.target.value)}
-							className='w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'>
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'>
 							<option value='manual'>Manual / Cash</option>
 							<option value='mpesa'>M-Pesa</option>
 							<option value='bank'>Bank Transfer</option>
@@ -143,9 +143,9 @@ export default function ContributionsPage({ params }: PageProps) {
 					</div>
 
 					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>
+						<label className='block text-sm font-medium text-text-secondary mb-1'>
 							Transaction ID{' '}
-							<span className='text-gray-400'>
+							<span className='text-text-muted'>
 								(optional for manual)
 							</span>
 						</label>
@@ -154,43 +154,43 @@ export default function ContributionsPage({ params }: PageProps) {
 							value={transactionId}
 							onChange={(e) => setTransactionId(e.target.value)}
 							placeholder='e.g. QHJ72KXLMN'
-							className='w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 						/>
 					</div>
 				</div>
 
 				{/* Feedback messages */}
 				{submitError && (
-					<p className='text-sm text-red-600'>{submitError}</p>
+					<p className='text-sm text-brand-danger'>{submitError}</p>
 				)}
 				{submitSuccess && (
-					<p className='text-sm text-green-600'>{submitSuccess}</p>
+					<p className='text-sm text-brand-success'>{submitSuccess}</p>
 				)}
 
 				<button
 					onClick={handleSubmit}
 					disabled={submitting}
-					className='w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'>
+					className='w-full bg-brand-primary text-white py-2 px-4 rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'>
 					{submitting ? 'Recording...' : 'Record Contribution'}
 				</button>
 			</div>
 
 			{/* Contributions list */}
 			<div className='space-y-3'>
-				<h2 className='text-lg font-semibold text-gray-800'>
+				<h2 className='text-lg font-semibold text-text-primary'>
 					Contribution History
 				</h2>
 
 				{loading && (
-					<p className='text-sm text-gray-500'>
+					<p className='text-sm text-text-secondary'>
 						Loading contributions...
 					</p>
 				)}
 
-				{error && <p className='text-sm text-red-600'>{error}</p>}
+				{error && <p className='text-sm text-brand-danger'>{error}</p>}
 
 				{!loading && !error && contributions.length === 0 && (
-					<p className='text-sm text-gray-500'>
+					<p className='text-sm text-text-secondary'>
 						No contributions recorded yet.
 					</p>
 				)}
@@ -199,12 +199,12 @@ export default function ContributionsPage({ params }: PageProps) {
 					contributions.map((c) => (
 						<div
 							key={c.id}
-							className='bg-white border border-gray-200 rounded-lg px-4 py-3 flex justify-between items-center'>
+							className='bg-surface-card border border-surface-border rounded-lg px-4 py-3 flex justify-between items-center'>
 							<div>
-								<p className='text-sm font-medium text-gray-900'>
+								<p className='text-sm font-medium text-text-primary'>
 									Contributor #{c.contributor}
 								</p>
-								<p className='text-xs text-gray-500'>
+								<p className='text-xs text-text-secondary'>
 									{c.payment_method} ·{' '}
 									{c.transaction_id || 'No transaction ID'} ·{' '}
 									{new Date(
@@ -212,7 +212,7 @@ export default function ContributionsPage({ params }: PageProps) {
 									).toLocaleDateString()}
 								</p>
 							</div>
-							<p className='text-sm font-semibold text-green-700'>
+							<p className='text-sm font-semibold text-brand-success'>
 								KES {parseFloat(c.amount).toLocaleString()}
 							</p>
 						</div>

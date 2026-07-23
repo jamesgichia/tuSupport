@@ -20,9 +20,9 @@ interface PageProps {
 // Status badge — visual only, not a security control
 function StatusBadge({ status }: { status: Fundraiser['status'] }) {
     const styles = {
-        draft:     'bg-amber-100 text-amber-800',
-        published: 'bg-green-100 text-green-800',
-        closed:    'bg-gray-100 text-gray-600',
+        draft:     'bg-brand-accent/20 text-brand-accent',
+        published: 'bg-brand-success/20 text-brand-success',
+        closed:    'bg-surface-elevated text-text-muted',
     };
     return (
         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
@@ -87,10 +87,10 @@ export default function FundraisersPage({ params }: PageProps) {
             {/* Header */}
             <div className='flex justify-between items-center'>
                 <div>
-                    <h1 className='text-2xl font-bold text-gray-900'>
+                    <h1 className='text-2xl font-bold text-text-primary'>
                         Fundraisers
                     </h1>
-                    <p className='text-sm text-gray-500 mt-1'>
+                    <p className='text-sm text-text-secondary mt-1'>
                         {isAdmin ? 'Admin view — all statuses' : 'Member view — published only'}
                     </p>
                 </div>
@@ -98,50 +98,50 @@ export default function FundraisersPage({ params }: PageProps) {
 
             {/* Action error */}
             {actionError && (
-                <p className='text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md'>
+                <p className='text-sm text-brand-danger bg-surface-elevated px-4 py-2 rounded-md'>
                     {actionError}
                 </p>
             )}
 
             {/* States */}
-            {loading && <p className='text-sm text-gray-500'>Loading fundraisers...</p>}
-            {error   && <p className='text-sm text-red-600'>{error}</p>}
+            {loading && <p className='text-sm text-text-secondary'>Loading fundraisers...</p>}
+            {error   && <p className='text-sm text-brand-danger'>{error}</p>}
             {!loading && !error && fundraisers.length === 0 && (
-                <p className='text-sm text-gray-500'>No fundraisers found.</p>
+                <p className='text-sm text-text-secondary'>No fundraisers found.</p>
             )}
 
             {/* Fundraiser list */}
             {!loading && !error && fundraisers.map((f) => (
                 <div
                     key={f.id}
-                    className='bg-white border border-gray-200 rounded-lg px-5 py-4 space-y-3'
+                    className='bg-surface-card border border-surface-border rounded-lg px-5 py-4 space-y-3'
                 >
                     {/* Card top row */}
                     <div className='flex justify-between items-start'>
                         <div className='space-y-1'>
                             <div className='flex items-center gap-2'>
-                                <p className='text-sm font-semibold text-gray-900'>
+                                <p className='text-sm font-semibold text-text-primary'>
                                     {f.title}
                                 </p>
                                 <StatusBadge status={f.status} />
                             </div>
-                            <p className='text-xs text-gray-500'>{f.description}</p>
+                            <p className='text-xs text-text-secondary'>{f.description}</p>
                         </div>
                         <div className='text-right shrink-0 ml-4'>
-                            <p className='text-sm font-bold text-green-700'>
+                            <p className='text-sm font-bold text-brand-success'>
                                 KES {parseFloat(f.goal_amount).toLocaleString()}
                             </p>
-                            <p className='text-xs text-gray-400 mt-1'>goal</p>
+                            <p className='text-xs text-text-muted mt-1'>goal</p>
                         </div>
                     </div>
 
                     {/* Admin controls — hidden from members (UX only) */}
                     {isAdmin && (
-                        <div className='flex gap-2 pt-1 border-t border-gray-100'>
+                        <div className='flex gap-2 pt-1 border-t border-surface-border'>
                             {f.status === 'draft' && (
                                 <button
                                     onClick={() => handleTransition(f.id, 'publish')}
-                                    className='text-xs font-medium px-3 py-1.5 rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors'
+                                    className='text-xs font-medium px-3 py-1.5 rounded-md bg-brand-primary text-white hover:opacity-90 transition-colors'
                                 >
                                     Publish
                                 </button>
@@ -149,19 +149,19 @@ export default function FundraisersPage({ params }: PageProps) {
                             {f.status === 'published' && (
                                 <button
                                     onClick={() => handleTransition(f.id, 'close')}
-                                    className='text-xs font-medium px-3 py-1.5 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors'
+                                    className='text-xs font-medium px-3 py-1.5 rounded-md bg-surface-elevated0 text-white hover:opacity-90 transition-colors'
                                 >
                                     Close
                                 </button>
                             )}
                             {f.status === 'closed' && (
-                                <span className='text-xs text-gray-400 py-1.5'>
+                                <span className='text-xs text-text-muted py-1.5'>
                                     No actions available
                                 </span>
                             )}
                             <Link
                                 href={`/dashboard/organizations/${orgId}/fundraisers/${f.id}/contributions`}
-                                className='text-xs font-medium px-3 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:border-teal-400 hover:text-teal-700 transition-colors'
+                                className='text-xs font-medium px-3 py-1.5 rounded-md border border-surface-border text-text-secondary hover:border-brand-primary hover:text-brand-primary transition-colors'
                             >
                                 View contributions
                             </Link>
@@ -170,10 +170,10 @@ export default function FundraisersPage({ params }: PageProps) {
 
                     {/* Member view — link only */}
                     {!isAdmin && f.status === 'published' && (
-                        <div className='pt-1 border-t border-gray-100'>
+                        <div className='pt-1 border-t border-surface-border'>
                             <Link
                                 href={`/dashboard/organizations/${orgId}/fundraisers/${f.id}/contributions`}
-                                className='text-xs font-medium text-teal-600 hover:text-teal-800 transition-colors'
+                                className='text-xs font-medium text-brand-primary hover:opacity-80 transition-colors'
                             >
                                 View contributions →
                             </Link>
