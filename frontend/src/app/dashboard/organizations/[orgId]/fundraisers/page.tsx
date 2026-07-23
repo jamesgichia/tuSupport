@@ -5,182 +5,287 @@ import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 
 interface Fundraiser {
-    id: number;
-    title: string;
-    description: string;
-    goal_amount: string;
-    status: 'draft' | 'published' | 'closed';
-    created_at: string;
+	id: number;
+	title: string;
+	description: string;
+	goal_amount: string;
+	status: 'draft' | 'published' | 'closed';
+	created_at: string;
 }
 
 interface PageProps {
-    params: Promise<{ orgId: string }>;
+	params: Promise<{ orgId: string }>;
 }
 
 // Status badge — visual only, not a security control
 function StatusBadge({ status }: { status: Fundraiser['status'] }) {
-    const styles = {
-        draft:     'bg-brand-accent/20 text-brand-accent',
-        published: 'bg-brand-success/20 text-brand-success',
-        closed:    'bg-surface-elevated text-text-muted',
-    };
-    return (
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
-            {status}
-        </span>
-    );
+	const styles = {
+		draft: 'bg-brand-accent/20 text-brand-accent',
+		published: 'bg-brand-success/20 text-brand-success',
+		closed: 'bg-surface-elevated text-text-muted',
+	};
+	return (
+		<span
+			className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
+			{status}
+		</span>
+	);
 }
 
 export default function FundraisersPage({ params }: PageProps) {
-    const { orgId } = use(params);
+	const { orgId } = use(params);
 
-    const [fundraisers, setFundraisers]   = useState<Fundraiser[]>([]);
-    const [loading, setLoading]           = useState(true);
-    const [error, setError]               = useState('');
-    const [actionError, setActionError]   = useState('');
-    const [role, setRole]                 = useState('');
+	const [fundraisers, setFundraisers] = useState<Fundraiser[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState('');
+	const [actionError, setActionError] = useState('');
+	const [role, setRole] = useState('');
+	const [showForm, setShowForm] = useState(false);
+	const [creating, setCreating] = useState(false);
+	const [createError, setCreateError] = useState('');
+	const [title, setTitle] = useState('');
+	const [description, setDescription] = useState('');
+	const [goalAmount, setGoalAmount] = useState('');
 
-    // Read role from sessionStorage — UX control only
-    useEffect(() => {
-        const storedRole = sessionStorage.getItem('current_role') ?? '';
-        setRole(storedRole);
-    }, []);
+	// Read role from sessionStorage — UX control only
+	useEffect(() => {
+		const storedRole = sessionStorage.getItem('current_role') ?? '';
+		setRole(storedRole);
+	}, []);
 
-    const fetchFundraisers = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const res = await apiClient.get(
-                `/api/v1/organizations/${orgId}/fundraisers/`
-            );
-            setFundraisers(res.data);
-        } catch {
-            setError('Failed to load fundraisers. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
+	const fetchFundraisers = async () => {
+		setLoading(true);
+		setError('');
+		try {
+			const res = await apiClient.get(
+				`/api/v1/organizations/${orgId}/fundraisers/`,
+			);
+			setFundraisers(res.data);
+		} catch {
+			setError('Failed to load fundraisers. Please try again.');
+		} finally {
+			setLoading(false);
+		}
+	};
 
-    useEffect(() => { fetchFundraisers(); }, [orgId]);
+	useEffect(() => {
+		fetchFundraisers();
+	}, [orgId]);
 
-    // Shared handler for publish and close — backend enforces auth
-    const handleTransition = async (
-        fundraiserId: number,
-        action: 'publish' | 'close'
-    ) => {
-        setActionError('');
-        try {
-            await apiClient.post(
-                `/api/v1/organizations/${orgId}/fundraisers/${fundraiserId}/${action}/`
-            );
-            // Refresh list to reflect new status
-            await fetchFundraisers();
-        } catch {
-            setActionError(`Failed to ${action} fundraiser. Please try again.`);
-        }
-    };
+	// Shared handler for publish and close — backend enforces auth
+	const handleTransition = async (
+		fundraiserId: number,
+		action: 'publish' | 'close',
+	) => {
+		setActionError('');
+		try {
+			await apiClient.post(
+				`/api/v1/organizations/${orgId}/fundraisers/${fundraiserId}/${action}/`,
+			);
+			// Refresh list to reflect new status
+			await fetchFundraisers();
+		} catch {
+			setActionError(`Failed to ${action} fundraiser. Please try again.`);
+		}
+	};
 
-    const isAdmin = role === 'admin';
+	const handleCreate = async () => {
+		setCreating(true);
+		setCreateError('');
+		try {
+			await apiClient.post(
+				`/api/v1/organizations/${orgId}/fundraisers/`,
+				{
+					title,
+					description,
+					goal_amount: goalAmount,
+				},
+			);
+			setTitle('');
+			setDescription('');
+			setGoalAmount('');
+			setShowForm(false);
+			await fetchFundraisers();
+		} catch (err: any) {
+			const detail =
+				err.response?.data?.detail || 'Failed to create fundraiser.';
+			setCreateError(detail);
+		} finally {
+			setCreating(false);
+		}
+	};
 
-    return (
-        <div className='max-w-2xl mx-auto p-6 space-y-6'>
-            {/* Header */}
-            <div className='flex justify-between items-center'>
-                <div>
-                    <h1 className='text-2xl font-bold text-text-primary'>
-                        Fundraisers
-                    </h1>
-                    <p className='text-sm text-text-secondary mt-1'>
-                        {isAdmin ? 'Admin view — all statuses' : 'Member view — published only'}
-                    </p>
-                </div>
-            </div>
+	const isAdmin = role === 'admin';
 
-            {/* Action error */}
-            {actionError && (
-                <p className='text-sm text-brand-danger bg-surface-elevated px-4 py-2 rounded-md'>
-                    {actionError}
-                </p>
-            )}
+	return (
+		<div className='max-w-2xl mx-auto p-6 space-y-6'>
+			{/* Header */}
+			<div className='flex justify-between items-center'>
+				<div>
+					<h1 className='text-2xl font-bold text-text-primary'>
+						Fundraisers
+					</h1>
+					<p className='text-sm text-text-secondary mt-1'>
+						{isAdmin
+							? 'Admin view — all statuses'
+							: 'Member view — published only'}
+					</p>
+				</div>
+			</div>
 
-            {/* States */}
-            {loading && <p className='text-sm text-text-secondary'>Loading fundraisers...</p>}
-            {error   && <p className='text-sm text-brand-danger'>{error}</p>}
-            {!loading && !error && fundraisers.length === 0 && (
-                <p className='text-sm text-text-secondary'>No fundraisers found.</p>
-            )}
+			{/* Action error */}
+			{actionError && (
+				<p className='text-sm text-brand-danger bg-surface-elevated px-4 py-2 rounded-md'>
+					{actionError}
+				</p>
+			)}
 
-            {/* Fundraiser list */}
-            {!loading && !error && fundraisers.map((f) => (
-                <div
-                    key={f.id}
-                    className='bg-surface-card border border-surface-border rounded-lg px-5 py-4 space-y-3'
-                >
-                    {/* Card top row */}
-                    <div className='flex justify-between items-start'>
-                        <div className='space-y-1'>
-                            <div className='flex items-center gap-2'>
-                                <p className='text-sm font-semibold text-text-primary'>
-                                    {f.title}
-                                </p>
-                                <StatusBadge status={f.status} />
-                            </div>
-                            <p className='text-xs text-text-secondary'>{f.description}</p>
-                        </div>
-                        <div className='text-right shrink-0 ml-4'>
-                            <p className='text-sm font-bold text-brand-success'>
-                                KES {parseFloat(f.goal_amount).toLocaleString()}
-                            </p>
-                            <p className='text-xs text-text-muted mt-1'>goal</p>
-                        </div>
-                    </div>
+			{/* States */}
+			{loading && (
+				<p className='text-sm text-text-secondary'>
+					Loading fundraisers...
+				</p>
+			)}
+			{error && <p className='text-sm text-brand-danger'>{error}</p>}
+			{!loading && !error && fundraisers.length === 0 && (
+				<p className='text-sm text-text-secondary'>
+					No fundraisers found.
+				</p>
+			)}
 
-                    {/* Admin controls — hidden from members (UX only) */}
-                    {isAdmin && (
-                        <div className='flex gap-2 pt-1 border-t border-surface-border'>
-                            {f.status === 'draft' && (
-                                <button
-                                    onClick={() => handleTransition(f.id, 'publish')}
-                                    className='text-xs font-medium px-3 py-1.5 rounded-md bg-brand-primary text-white hover:opacity-90 transition-colors'
-                                >
-                                    Publish
-                                </button>
-                            )}
-                            {f.status === 'published' && (
-                                <button
-                                    onClick={() => handleTransition(f.id, 'close')}
-                                    className='text-xs font-medium px-3 py-1.5 rounded-md bg-surface-elevated0 text-white hover:opacity-90 transition-colors'
-                                >
-                                    Close
-                                </button>
-                            )}
-                            {f.status === 'closed' && (
-                                <span className='text-xs text-text-muted py-1.5'>
-                                    No actions available
-                                </span>
-                            )}
-                            <Link
-                                href={`/dashboard/organizations/${orgId}/fundraisers/${f.id}/contributions`}
-                                className='text-xs font-medium px-3 py-1.5 rounded-md border border-surface-border text-text-secondary hover:border-brand-primary hover:text-brand-primary transition-colors'
-                            >
-                                View contributions
-                            </Link>
-                        </div>
-                    )}
+			{/* Create fundraiser — admin only (UX control) */}
+			{isAdmin && (
+				<div className='bg-surface-card border border-surface-border rounded-lg p-5 space-y-4'>
+					<div className='flex justify-between items-center'>
+						<h2 className='text-sm font-semibold text-text-primary'>
+							New Fundraiser
+						</h2>
+						<button
+							onClick={() => setShowForm(!showForm)}
+							className='text-xs text-brand-primary hover:opacity-80 transition-opacity'>
+							{showForm ? 'Cancel' : '+ Create'}
+						</button>
+					</div>
 
-                    {/* Member view — link only */}
-                    {!isAdmin && f.status === 'published' && (
-                        <div className='pt-1 border-t border-surface-border'>
-                            <Link
-                                href={`/dashboard/organizations/${orgId}/fundraisers/${f.id}/contributions`}
-                                className='text-xs font-medium text-brand-primary hover:opacity-80 transition-colors'
-                            >
-                                View contributions →
-                            </Link>
-                        </div>
-                    )}
-                </div>
-            ))}
-        </div>
-    );
+					{showForm && (
+						<div className='space-y-3'>
+							<input
+								type='text'
+								placeholder='Title'
+								value={title}
+								onChange={(e) => setTitle(e.target.value)}
+								className='w-full border border-surface-border rounded-md px-3 py-2 text-sm bg-surface-bg text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary'
+							/>
+							<textarea
+								placeholder='Description'
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+								rows={3}
+								className='w-full border border-surface-border rounded-md px-3 py-2 text-sm bg-surface-bg text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary'
+							/>
+							<input
+								type='number'
+								placeholder='Goal amount (KES)'
+								value={goalAmount}
+								onChange={(e) => setGoalAmount(e.target.value)}
+								min='1'
+								className='w-full border border-surface-border rounded-md px-3 py-2 text-sm bg-surface-bg text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary'
+							/>
+
+							{createError && (
+								<p className='text-sm text-brand-danger'>
+									{createError}
+								</p>
+							)}
+
+							<button
+								onClick={handleCreate}
+								disabled={creating}
+								className='w-full bg-brand-primary text-white py-2 px-4 rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity'>
+								{creating ? 'Creating...' : 'Create Fundraiser'}
+							</button>
+						</div>
+					)}
+				</div>
+			)}
+
+			{/* Fundraiser list */}
+			{!loading &&
+				!error &&
+				fundraisers.map((f) => (
+					<div
+						key={f.id}
+						className='bg-surface-card border border-surface-border rounded-lg px-5 py-4 space-y-3'>
+						{/* Card top row */}
+						<div className='flex justify-between items-start'>
+							<div className='space-y-1'>
+								<div className='flex items-center gap-2'>
+									<p className='text-sm font-semibold text-text-primary'>
+										{f.title}
+									</p>
+									<StatusBadge status={f.status} />
+								</div>
+								<p className='text-xs text-text-secondary'>
+									{f.description}
+								</p>
+							</div>
+							<div className='text-right shrink-0 ml-4'>
+								<p className='text-sm font-bold text-brand-success'>
+									KES{' '}
+									{parseFloat(f.goal_amount).toLocaleString()}
+								</p>
+								<p className='text-xs text-text-muted mt-1'>
+									goal
+								</p>
+							</div>
+						</div>
+
+						{/* Admin controls — hidden from members (UX only) */}
+						{isAdmin && (
+							<div className='flex gap-2 pt-1 border-t border-surface-border'>
+								{f.status === 'draft' && (
+									<button
+										onClick={() =>
+											handleTransition(f.id, 'publish')
+										}
+										className='text-xs font-medium px-3 py-1.5 rounded-md bg-brand-primary text-white hover:opacity-90 transition-colors'>
+										Publish
+									</button>
+								)}
+								{f.status === 'published' && (
+									<button
+										onClick={() =>
+											handleTransition(f.id, 'close')
+										}
+										className='text-xs font-medium px-3 py-1.5 rounded-md bg-surface-elevated0 text-white hover:opacity-90 transition-colors'>
+										Close
+									</button>
+								)}
+								{f.status === 'closed' && (
+									<span className='text-xs text-text-muted py-1.5'>
+										No actions available
+									</span>
+								)}
+								<Link
+									href={`/dashboard/organizations/${orgId}/fundraisers/${f.id}/contributions`}
+									className='text-xs font-medium px-3 py-1.5 rounded-md border border-surface-border text-text-secondary hover:border-brand-primary hover:text-brand-primary transition-colors'>
+									View contributions
+								</Link>
+							</div>
+						)}
+
+						{/* Member view — link only */}
+						{!isAdmin && f.status === 'published' && (
+							<div className='pt-1 border-t border-surface-border'>
+								<Link
+									href={`/dashboard/organizations/${orgId}/fundraisers/${f.id}/contributions`}
+									className='text-xs font-medium text-brand-primary hover:opacity-80 transition-colors'>
+									View contributions →
+								</Link>
+							</div>
+						)}
+					</div>
+				))}
+		</div>
+	);
 }
