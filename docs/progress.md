@@ -1,48 +1,49 @@
-**Last updated:** Week 5, Day 2 — Fundraiser management UI
+**Last updated:** Week 5, Day 3 — Integration & colour token system
 
 ---
 
-## Current state — end of Week 5, Day 2
+## Current state — end of Week 5, Day 3
 
-All Week 4 work stable on main.
+All Week 5 Day 3 work merged to main.
 Backend: 30/30 tests passing.
-Fundraiser management UI built and verified end-to-end.
+Colour token system fully wired and dark mode verified.
 
 ---
 
-## Completed — Week 5, Day 2
+## Completed — Week 5, Day 3
 
-**Fundraiser management UI**
+**Colour token system**
 
-- pick-org/page.tsx: stores selected role and org name in sessionStorage
-  at selection time — role flows into dashboard pages correctly
-- fundraisers/page.tsx: rebuilt with status badges (draft/published/closed),
-  role-aware admin controls, Publish/Close buttons wired to real endpoints
-- handleTransition() shared handler — calls publish/ or close/ endpoint,
-  refreshes list on success
-- Both trust boundary layers verified:
-  - Frontend hides admin buttons from members (UX control)
-  - Backend rejects member requests with 403 (security control)
-- State machine loop confirmed: draft → published → closed via UI
-- Colour palette and dark/light theme system agreed — CSS variables approach,
-  brand colours unchanged across modes, surfaces flip per theme
-- Branch: feature/fundraiser-ui (not yet merged)
+- globals.css rebuilt with brand tokens (unchanged across modes) and
+  semantic surface/text tokens (flip per mode)
+- Dark mode wired via both prefers-color-scheme media query and
+  [data-theme="dark"] attribute — ready for manual toggle
+- All components migrated off raw Tailwind colour classes
+- Token bridge via @theme inline — Tailwind utility classes now
+  reference CSS variables
+
+**Create fundraiser form**
+
+- Admin-only collapsible form on fundraisers page
+- POST to /api/v1/organizations/<orgId>/fundraisers/
+- List auto-refreshes on success
+- Backend permission class enforces admin-only independently of UI
 
 ---
 
 ## Known gaps — carried forward
 
-- [ ] contributor_name gap: unregistered cash contributors still unaddressed
+- [ ] contributor_name gap: unregistered cash contributors unaddressed
 - [ ] Secure=True on refresh cookie: pending HTTPS
 - [ ] Duplicate manual contributions: deferred to Phase 2
 - [ ] Rate limiting on authenticated endpoints: must resolve before Phase 3
-- [ ] Global CSS variables not yet wired into Tailwind config — colour
-      palette agreed but not implemented as a token system yet
+- [ ] Dark mode manual toggle: [data-theme="dark"] wired in CSS,
+      no UI toggle yet
 
 ---
 
-## Up next — Week 5, Day 3 (Integration)
+## Up next — Week 5, Day 4 (Security & Hardening)
 
-- Wire colour token system into tailwind.config.ts and globals.css
-- Contributions page UI
-- Create fundraiser form (admin only)
+- Input validation audit on contribution and fundraiser endpoints
+- Rate limiting assessment
+- Review contributor_name gap — decide defer or fix
