@@ -88,10 +88,12 @@ REST_FRAMEWORK = {
     # ...your existing keys stay here...
 		'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
+				'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '20/hour',
 				'login': '5/minute',   # Tight — brute force protection
+				'user': '200/hour',
     },
 		'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',

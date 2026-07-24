@@ -42,6 +42,12 @@ class Contribution(TenantScopedModel):
         on_delete=models.PROTECT,   # same reason — audit trail must survive user deletion
         related_name='contributions'
     )
+    contributor_name = models.CharField(
+				max_length=100,
+				blank=True,
+				null=True,
+				help_text="Name of contributor if not a registered platform user."
+		)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(
         max_length=20,

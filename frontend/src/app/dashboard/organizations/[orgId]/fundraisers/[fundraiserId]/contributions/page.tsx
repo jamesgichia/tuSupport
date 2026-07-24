@@ -3,11 +3,11 @@
 import apiClient from '@/lib/axios';
 import { use, useEffect, useState } from 'react';
 
-// --- Type definitions ---
 interface Contribution {
 	id: number;
 	fundraiser: number;
 	contributor: number;
+	contributor_name: string | null;
 	amount: string;
 	payment_method: string;
 	phone_number: string | null;
@@ -23,12 +23,9 @@ interface PageProps {
 	}>;
 }
 
-// --- Main page component ---
 export default function ContributionsPage({ params }: PageProps) {
-	// Next.js 15: params is a Promise — unwrap it with React's use()
 	const { orgId, fundraiserId } = use(params);
 
-	// --- State ---
 	const [contributions, setContributions] = useState<Contribution[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
@@ -39,9 +36,10 @@ export default function ContributionsPage({ params }: PageProps) {
 	// Form fields
 	const [amount, setAmount] = useState('');
 	const [paymentMethod, setPaymentMethod] = useState('manual');
-	const [transactionId, setTransactionId] = useState('');
+	const [phoneNumber, setPhoneNumber] = useState('');
+	const [contributorName, setContributorName] = useState('');
+	const [notes, setNotes] = useState('');
 
-	// --- Fetch contributions on mount ---
 	const fetchContributions = async () => {
 		setLoading(true);
 		setError('');
@@ -61,7 +59,6 @@ export default function ContributionsPage({ params }: PageProps) {
 		fetchContributions();
 	}, [orgId, fundraiserId]);
 
-	// --- Submit new contribution ---
 	const handleSubmit = async () => {
 		setSubmitting(true);
 		setSubmitError('');
@@ -71,33 +68,35 @@ export default function ContributionsPage({ params }: PageProps) {
 			await apiClient.post(
 				`/api/v1/organizations/${orgId}/fundraisers/${fundraiserId}/contributions/`,
 				{
-					amount: amount,
+					amount,
 					payment_method: paymentMethod,
-					transaction_id: transactionId || undefined,
+					phone_number:
+						paymentMethod === 'mpesa' ? phoneNumber : undefined,
+					contributor_name: contributorName || undefined,
+					notes: notes || undefined,
 				},
 			);
 
-			// Reset form
 			setAmount('');
 			setPaymentMethod('manual');
-			setTransactionId('');
+			setPhoneNumber('');
+			setContributorName('');
+			setNotes('');
 			setSubmitSuccess('Contribution recorded successfully.');
-
-			// Refresh the list
 			fetchContributions();
 		} catch (err: any) {
 			const detail =
-				err.response?.data?.detail || 'Failed to record contribution.';
+				err.response?.data?.detail ||
+				err.response?.data?.phone_number?.[0] ||
+				'Failed to record contribution.';
 			setSubmitError(detail);
 		} finally {
 			setSubmitting(false);
 		}
 	};
 
-	// --- Render ---
 	return (
 		<div className='max-w-2xl mx-auto p-6 space-y-8'>
-			{/* Page header */}
 			<div>
 				<h1 className='text-2xl font-bold text-text-primary'>
 					Contributions
@@ -114,6 +113,7 @@ export default function ContributionsPage({ params }: PageProps) {
 				</h2>
 
 				<div className='space-y-3'>
+					{/* Amount */}
 					<div>
 						<label className='block text-sm font-medium text-text-secondary mb-1'>
 							Amount (KES)
@@ -124,47 +124,80 @@ export default function ContributionsPage({ params }: PageProps) {
 							onChange={(e) => setAmount(e.target.value)}
 							placeholder='e.g. 500'
 							min='1'
-							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'
 						/>
 					</div>
 
+					{/* Contributor name — for unregistered cash payers */}
 					<div>
 						<label className='block text-sm font-medium text-text-secondary mb-1'>
-							Payment Method
+							Contributor name{' '}
+							<span className='text-text-muted'>(optional)</span>
+						</label>
+						<input
+							type='text'
+							value={contributorName}
+							onChange={(e) => setContributorName(e.target.value)}
+							placeholder='e.g. John Kamau'
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'
+						/>
+					</div>
+
+					{/* Payment method */}
+					<div>
+						<label className='block text-sm font-medium text-text-secondary mb-1'>
+							Payment method
 						</label>
 						<select
 							value={paymentMethod}
 							onChange={(e) => setPaymentMethod(e.target.value)}
-							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'>
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'>
 							<option value='manual'>Manual / Cash</option>
 							<option value='mpesa'>M-Pesa</option>
-							<option value='bank'>Bank Transfer</option>
 						</select>
 					</div>
 
+					{/* Phone number — only shown for M-Pesa */}
+					{paymentMethod === 'mpesa' && (
+						<div>
+							<label className='block text-sm font-medium text-text-secondary mb-1'>
+								Phone number
+							</label>
+							<input
+								type='tel'
+								value={phoneNumber}
+								onChange={(e) => setPhoneNumber(e.target.value)}
+								placeholder='e.g. 0712345678'
+								maxLength={15}
+								className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'
+							/>
+						</div>
+					)}
+
+					{/* Notes */}
 					<div>
 						<label className='block text-sm font-medium text-text-secondary mb-1'>
-							Transaction ID{' '}
-							<span className='text-text-muted'>
-								(optional for manual)
-							</span>
+							Notes{' '}
+							<span className='text-text-muted'>(optional)</span>
 						</label>
-						<input
-							type='text'
-							value={transactionId}
-							onChange={(e) => setTransactionId(e.target.value)}
-							placeholder='e.g. QHJ72KXLMN'
-							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+						<textarea
+							value={notes}
+							onChange={(e) => setNotes(e.target.value)}
+							placeholder='Any additional details...'
+							rows={2}
+							maxLength={2000}
+							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'
 						/>
 					</div>
 				</div>
 
-				{/* Feedback messages */}
 				{submitError && (
 					<p className='text-sm text-brand-danger'>{submitError}</p>
 				)}
 				{submitSuccess && (
-					<p className='text-sm text-brand-success'>{submitSuccess}</p>
+					<p className='text-sm text-brand-success'>
+						{submitSuccess}
+					</p>
 				)}
 
 				<button
@@ -186,9 +219,7 @@ export default function ContributionsPage({ params }: PageProps) {
 						Loading contributions...
 					</p>
 				)}
-
 				{error && <p className='text-sm text-brand-danger'>{error}</p>}
-
 				{!loading && !error && contributions.length === 0 && (
 					<p className='text-sm text-text-secondary'>
 						No contributions recorded yet.
@@ -201,12 +232,17 @@ export default function ContributionsPage({ params }: PageProps) {
 							key={c.id}
 							className='bg-surface-card border border-surface-border rounded-lg px-4 py-3 flex justify-between items-center'>
 							<div>
+								{/* Show contributor_name if present, fall back to ID */}
 								<p className='text-sm font-medium text-text-primary'>
-									Contributor #{c.contributor}
+									{c.contributor_name ||
+										`Contributor #${c.contributor}`}
 								</p>
 								<p className='text-xs text-text-secondary'>
 									{c.payment_method} ·{' '}
-									{c.transaction_id || 'No transaction ID'} ·{' '}
+									{c.phone_number ||
+										c.transaction_id ||
+										'No reference'}{' '}
+									·{' '}
 									{new Date(
 										c.created_at,
 									).toLocaleDateString()}
