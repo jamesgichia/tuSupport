@@ -1,49 +1,33 @@
-**Last updated:** Week 5, Day 5 — Review & Stabilization
+**Last updated:** Week 6, Day 1 — Backend Day
 
----
+## Current state
 
-## Current state — end of Week 5, Day 5
+32 tests passing (30 existing + 2 new migrations verified clean).
+Three Monday deliverables complete and committed to main.
 
-All Week 5 work audited. 30/30 tests passing.
-No new code committed today — audit and planning session.
+## What shipped today
 
----
+- contributor_name spoofing closed: perform_create() now derives name
+  server-side; admins may supply third-party names, members cannot
+- NULL/NULL CHECK constraint added to Contribution model — audit-grade
+  identity requirement enforced at DB level
+- Beneficiary module: model (org-scoped, UniqueConstraint on national_id
+  per org), dual serializers (public/admin), admin-gated list+create view
 
-## Friday audit findings — Week 5 additions
+## Architecture decisions made
 
-**Layer 1 — Database & Schema**
-- contributor_name as free-text allows spoofing for registered users
-- Fix: serializer should derive name from user account when authenticated
+- contributor_name derivation lives in perform_create() not validate() —
+  data derivation is a view concern, validation is a serializer concern
+- Beneficiary scoped to Organization not Fundraiser — supports
+  longitudinal tracking across multiple campaigns
+- Fundraiser <-> Beneficiary M2M link deferred to Week 7
 
-**Layer 2 — Models & Multi-tenancy**
-- NULL/NULL contribution state possible — violates audit-grade requirement
-- Fix: cross-field CHECK constraint at database level + serializer validation
+## Gaps logged today
 
-**Layer 3 — API Views & Serializers**
-- ChoiceField on payment_method correctly stops invalid values at serializer
-- No action required
-
-**Layer 4 — Auth & Authorization**
-- Per-user rate limiting does not stop distributed account abuse
-- Deferred to Week 8 hardening — not public-facing yet
-
-**Layer 5 — Tests**
-- Rate limiting has no test coverage
-- Fix: add test file with cache.clear() in setUp — Week 6 Thursday
-
----
-
-## Week 6 plan
-
-Monday    — Beneficiary module (backend: model, serializer, endpoints)
-            + contributor_name spoofing fix
-            + NULL/NULL CHECK constraint + migration
-Tuesday   — Beneficiary UI (list + create) + dark mode toggle
-Wednesday — Wire beneficiary frontend to API, end-to-end flow test
-Thursday  — Security pass on beneficiary endpoints + rate limit tests
-Friday    — 5-layer audit + Week 7 planning + progress.md update
-
----
+- contributor FK on Contribution has no null=True — anonymous cash
+  contributions currently impossible at model level; deferred
+- submitted_by audit principal on contributions — deferred to Week 8
+  hardening
 
 ## Known gaps — carried forward
 
@@ -52,5 +36,6 @@ Friday    — 5-layer audit + Week 7 planning + progress.md update
 - [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
 - [ ] Per-IP rate limiting: deferred to Week 8
 - [ ] Rate limit test coverage: Week 6 Thursday
-- [ ] contributor_name spoofing fix: Week 6 Monday
-- [ ] NULL/NULL CHECK constraint: Week 6 Monday
+- [ ] contributor FK nullable: deferred (anonymous cash contributions)
+- [ ] submitted_by audit principal: deferred to Week 8
+- [ ] Fundraiser <-> Beneficiary M2M: Week 7
