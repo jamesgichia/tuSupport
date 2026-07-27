@@ -1,50 +1,47 @@
-**Last updated:** Week 5, Day 4 — Security & Hardening
+**Last updated:** Week 5, Day 5 — Review & Stabilization
 
 ---
 
-## Current state — end of Week 5, Day 4
+## Current state — end of Week 5, Day 5
 
-All Week 5 Day 4 work committed to main.
-Backend: 30/30 tests passing.
-Frontend: contributions form updated.
+All Week 5 work audited. 30/30 tests passing.
+No new code committed today — audit and planning session.
 
 ---
 
-## Completed — Week 5, Day 4
+## Friday audit findings — Week 5 additions
 
-**Input validation hardening**
+**Layer 1 — Database & Schema**
+- contributor_name as free-text allows spoofing for registered users
+- Fix: serializer should derive name from user account when authenticated
 
-- FundraiserSerializer: explicit field declarations for title
-  (min_length=5, trim_whitespace=True), description (max_length=5000),
-  goal_amount (min=1.00, max=10,000,000.00)
-- ContributionSerializer: ChoiceField on payment_method closes
-  arbitrary string injection; amount bounded (min=0.01,
-  max=999,999.99); notes capped at 2000 chars
-- Cross-field validation: mpesa payment_method requires phone_number
-  via object-level validate() method
-- Key lesson: model choices constraints do not enforce at the API
-  layer — DRF skips model.full_clean() by default; explicit
-  ChoiceField required on the serializer
+**Layer 2 — Models & Multi-tenancy**
+- NULL/NULL contribution state possible — violates audit-grade requirement
+- Fix: cross-field CHECK constraint at database level + serializer validation
 
-**Rate limiting**
+**Layer 3 — API Views & Serializers**
+- ChoiceField on payment_method correctly stops invalid values at serializer
+- No action required
 
-- DEFAULT_THROTTLE_CLASSES added to REST_FRAMEWORK settings
-- Anon: 20/hour, User: 200/hour
-- Clears the authenticated endpoint rate limiting gap carried
-  forward from Week 4
+**Layer 4 — Auth & Authorization**
+- Per-user rate limiting does not stop distributed account abuse
+- Deferred to Week 8 hardening — not public-facing yet
 
-**contributor_name gap closed**
+**Layer 5 — Tests**
+- Rate limiting has no test coverage
+- Fix: add test file with cache.clear() in setUp — Week 6 Thursday
 
-- Nullable CharField(max_length=100) added to Contribution model
-- Migration applied cleanly
-- ContributionSerializer updated to accept and return the field
-- Contributions frontend form: contributor_name input added
-- Contributions frontend form: phone_number field added,
-  conditionally shown for mpesa only
-- Contributions frontend form: bank transfer option removed —
-  was never a valid backend choice
-- Contribution list display: shows contributor_name when present,
-  falls back to Contributor #ID
+---
+
+## Week 6 plan
+
+Monday    — Beneficiary module (backend: model, serializer, endpoints)
+            + contributor_name spoofing fix
+            + NULL/NULL CHECK constraint + migration
+Tuesday   — Beneficiary UI (list + create) + dark mode toggle
+Wednesday — Wire beneficiary frontend to API, end-to-end flow test
+Thursday  — Security pass on beneficiary endpoints + rate limit tests
+Friday    — 5-layer audit + Week 7 planning + progress.md update
 
 ---
 
@@ -53,11 +50,7 @@ Frontend: contributions form updated.
 - [ ] Secure=True on refresh cookie: pending HTTPS setup
 - [ ] Duplicate manual contributions: deferred to Phase 2
 - [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
-
----
-
-## Up next — Week 5, Day 5 (Review & Stabilization)
-
-- Full Friday audit across all 5 layers
-- Week 6 planning
-- progress.md update before session close
+- [ ] Per-IP rate limiting: deferred to Week 8
+- [ ] Rate limit test coverage: Week 6 Thursday
+- [ ] contributor_name spoofing fix: Week 6 Monday
+- [ ] NULL/NULL CHECK constraint: Week 6 Monday
