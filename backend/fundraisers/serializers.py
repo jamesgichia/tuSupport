@@ -64,8 +64,16 @@ class ContributionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'contributor', 'fundraiser', 'created_at', 'transaction_id']
 
     def validate(self, data):
+        # Existing M-Pesa check
         if data.get('payment_method') == 'mpesa' and not data.get('phone_number'):
             raise serializers.ValidationError(
                 {"phone_number": "Phone number is required for M-Pesa payments."}
             )
+
+        # NULL/NULL guard — a contribution must have at least one identity signal
+        if not data.get('contributor_name') and not self.context['request'].user.is_authenticated:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["A contribution must have either a linked account or a contributor name."]}
+            )
+
         return data

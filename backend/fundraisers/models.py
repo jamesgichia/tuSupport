@@ -63,6 +63,15 @@ class Contribution(TenantScopedModel):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(contributor__isnull=True) |
+                    ~models.Q(contributor_name__isnull=True)
+                ),
+                name='contribution_has_identity'
+            )
+        ]
 
     def __str__(self):
         return f"{self.contributor} → {self.fundraiser} ({self.amount})"
