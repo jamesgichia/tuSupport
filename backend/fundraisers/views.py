@@ -240,3 +240,37 @@ class ContributionListCreateView(generics.ListCreateAPIView):
             fundraiser=fundraiser,
             contributor_name=contributor_name
         )
+
+
+class BeneficiaryListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_membership_or_404(self):
+        org_id = self.kwargs['org_id']
+        membership = self.request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if not membership:
+            raise Http404
+        return membership
+
+    def get_serializer_class(self):
+        membership = self.get_membership_or_404()
+        if membership.role == Membership.Role.ADMIN:
+            return BeneficiaryAdminSerializer
+        return BeneficiaryPublicSerializer
+
+    def get_queryset(self):
+        membership = self.get_membership_or_404()
+        return Beneficiary.objects.filter(
+            organization=membership.organization
+        )
+
+    def perform_create(self, serializer):
+        membership = self.get_membership_or_404()
+        # Only admins may create beneficiary records
+        if membership.role != Membership.Role.ADMIN:
+            raise PermissionDenied(
+                "Only administrators can register beneficiaries."
+            )
+        serializer.save(organization=membership.organization)

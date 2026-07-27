@@ -75,3 +75,60 @@ class Contribution(TenantScopedModel):
 
     def __str__(self):
         return f"{self.contributor} → {self.fundraiser} ({self.amount})"
+
+
+
+class Beneficiary(TenantScopedModel):
+    """
+    Represents a welfare case or individual supported by the organization.
+    Scoped to organization — not tied to a single fundraiser.
+    The Fundraiser <-> Beneficiary link is a Phase 2 addition (M2M junction table).
+    """
+
+    class Category(models.TextChoices):
+        MEDICAL = 'medical', 'Medical'
+        EDUCATION = 'education', 'Education'
+        FUNERAL = 'funeral', 'Funeral/Bereavement'
+        DISASTER = 'disaster', 'Disaster Relief'
+        OTHER = 'other', 'Other'
+
+    class VerificationStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        VERIFIED = 'verified', 'Verified'
+        ARCHIVED = 'archived', 'Archived'
+
+    # Public-facing fields
+    display_name = models.CharField(
+        max_length=200,
+        help_text="Public label e.g. 'The Omondi Family' or 'Baby Jane Medical Fund'"
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=Category.choices,
+        default=Category.OTHER
+    )
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING
+    )
+
+    # Private/admin fields
+    full_name = models.CharField(max_length=200)
+    national_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="National ID or passport — for payout verification and fraud prevention"
+    )
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    relationship_to_org = models.CharField(max_length=100, blank=True, null=True)
+    internal_notes = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.display_name} ({self.organization})"

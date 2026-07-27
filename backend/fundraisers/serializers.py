@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Fundraiser, Contribution
+from .models import Fundraiser, Contribution, Beneficiary
 from decimal import Decimal
 
 class FundraiserSerializer(serializers.ModelSerializer):
@@ -77,3 +77,25 @@ class ContributionSerializer(serializers.ModelSerializer):
             )
 
         return data
+
+
+
+class BeneficiaryPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Beneficiary
+        fields = [
+            'id', 'display_name', 'category',
+            'verification_status', 'created_at'
+        ]
+        read_only_fields = ['id', 'verification_status', 'created_at']
+
+
+class BeneficiaryAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Beneficiary
+        fields = [
+            'id', 'display_name', 'category', 'verification_status',
+            'full_name', 'national_id', 'phone_number',
+            'relationship_to_org', 'internal_notes', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
