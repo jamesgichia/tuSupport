@@ -209,17 +209,34 @@ class ContributionListCreateView(generics.ListCreateAPIView):
         if not fundraiser:
             raise Http404
 
-        # State machine guard — contributions only accepted on live fundraisers
-        # A draft hasn't launched; a closed fundraiser has reconciled.
-        # Accepting money in either state would corrupt the audit trail.
+        # State machine guard — only published fundraisers accept contributions
         if fundraiser.status != Fundraiser.Status.PUBLISHED:
             raise ValidationError(
                 f"This fundraiser is not accepting contributions "
                 f"(current status: '{fundraiser.status}')."
             )
 
+        user = self.request.user
+
+        # Step 2: Resolve contributor_name based on role
+        if membership.role == Membership.Role.ADMIN:
+            # Admins may record on behalf of a third party
+            # If they supply a name, use it; otherwise fall back to their own account name
+            contributor_name = (
+                serializer.validated_data.get('contributor_name')
+                or f"{user.first_name} {user.last_name}".strip()
+                or user.username
+            )
+        else:
+            # Regular members — derive strictly from account, ignore client input
+            contributor_name = (
+                f"{user.first_name} {user.last_name}".strip()
+                or user.username
+            )
+
         serializer.save(
-            contributor=self.request.user,
+            contributor=user,
             organization=membership.organization,
-            fundraiser=fundraiser
+            fundraiser=fundraiser,
+            contributor_name=contributor_name
         )
