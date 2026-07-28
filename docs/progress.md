@@ -1,33 +1,31 @@
-**Last updated:** Week 6, Day 1 — Backend Day
+**Last updated:** Week 6, Day 2 — Frontend Day
 
 ## Current state
 
-32 tests passing (30 existing + 2 new migrations verified clean).
-Three Monday deliverables complete and committed to main.
+30 tests passing. Two commits on main.
 
 ## What shipped today
 
-- contributor_name spoofing closed: perform_create() now derives name
-  server-side; admins may supply third-party names, members cannot
-- NULL/NULL CHECK constraint added to Contribution model — audit-grade
-  identity requirement enforced at DB level
-- Beneficiary module: model (org-scoped, UniqueConstraint on national_id
-  per org), dual serializers (public/admin), admin-gated list+create view
+- Beneficiary management page — admin-only, silent redirect for non-admins
+- UniqueConstraint on national_id per org — was documented as done in Week 6
+  Day 1 but never existed in model or migrations; caught and fixed today
+- Duplicate beneficiary record cleaned up from dev data
 
 ## Architecture decisions made
 
-- contributor_name derivation lives in perform_create() not validate() —
-  data derivation is a view concern, validation is a serializer concern
-- Beneficiary scoped to Organization not Fundraiser — supports
-  longitudinal tracking across multiple campaigns
-- Fundraiser <-> Beneficiary M2M link deferred to Week 7
+- Option B on beneficiary visibility: dual serializer approach retained —
+  members will see limited public fields through fundraiser pages (Week 7),
+  not blocked entirely. Backend already made this decision correctly.
+- Frontend category values aligned to backend model choices:
+  funeral/disaster not bereavement/emergency
 
-## Gaps logged today
+## Audit findings
 
-- contributor FK on Contribution has no null=True — anonymous cash
-  contributions currently impossible at model level; deferred
-- submitted_by audit principal on contributions — deferred to Week 8
-  hardening
+- UniqueConstraint gap: progress.md documented constraint as shipped;
+  Beneficiary._meta.constraints was []. Documentation outpaced implementation.
+- Missing import 500: Beneficiary model/serializer not imported in views.py
+  caused unhandled 500 on POST — same failure class as Week 4 PermissionDenied
+  gap. Broken control, loud failure, invisible to user.
 
 ## Known gaps — carried forward
 
@@ -39,3 +37,5 @@ Three Monday deliverables complete and committed to main.
 - [ ] contributor FK nullable: deferred (anonymous cash contributions)
 - [ ] submitted_by audit principal: deferred to Week 8
 - [ ] Fundraiser <-> Beneficiary M2M: Week 7
+- [ ] Auth context refactor: sessionStorage pattern is brittle across tabs;
+      no central auth state — flagged, not blocking
