@@ -4,8 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import Http404
-from .models import Fundraiser, Contribution
+from .models import Fundraiser, Contribution, Beneficiary
 from .serializers import FundraiserSerializer, ContributionSerializer
+from .serializers import BeneficiaryAdminSerializer, BeneficiaryPublicSerializer
 from core.models import Membership
 
 

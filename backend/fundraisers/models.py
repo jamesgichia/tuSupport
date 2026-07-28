@@ -129,6 +129,13 @@ class Beneficiary(TenantScopedModel):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+						models.UniqueConstraint(
+								fields=['organization', 'national_id'],
+								condition=models.Q(national_id__isnull=False),
+								name='unique_national_id_per_org'
+						)
+				]
 
     def __str__(self):
         return f"{self.display_name} ({self.organization})"
