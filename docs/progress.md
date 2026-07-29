@@ -1,35 +1,34 @@
-**Last updated:** Week 6, Day 2 — Frontend Day
+**Last updated:** Week 6, Day 3 — Integration Day
 
 ## Current state
 
-30 tests passing. Two commits on main.
+30 tests passing. On branch feature/beneficiary-integration.
 
-## What shipped today
+## What was verified today
 
-- Beneficiary management page — admin-only, silent redirect for non-admins
-- UniqueConstraint on national_id per org — was documented as done in Week 6
-  Day 1 but never existed in model or migrations; caught and fixed today
-- Duplicate beneficiary record cleaned up from dev data
+- Beneficiary list endpoint confirmed hitting real backend (not mock data)
+- CORS configured correctly — credentials passing through
+- Dual serializer security verification via direct curl simulation:
+  - Admin token: returns full fields including national_id, phone_number,
+    internal_notes
+  - Member token: returns stripped public fields only (display_name,
+    category, verification_status, created_at)
+  - Backend enforces field-level privacy independently of frontend redirect
+- Identified logout gap: no token blacklist, refresh token stays valid
+  after logout
 
-## Architecture decisions made
+## Decisions made
 
-- Option B on beneficiary visibility: dual serializer approach retained —
-  members will see limited public fields through fundraiser pages (Week 7),
-  not blocked entirely. Backend already made this decision correctly.
-- Frontend category values aligned to backend model choices:
-  funeral/disaster not bereavement/emergency
-
-## Audit findings
-
-- UniqueConstraint gap: progress.md documented constraint as shipped;
-  Beneficiary._meta.constraints was []. Documentation outpaced implementation.
-- Missing import 500: Beneficiary model/serializer not imported in views.py
-  caused unhandled 500 on POST — same failure class as Week 4 PermissionDenied
-  gap. Broken control, loud failure, invisible to user.
+- public_description field on Beneficiary deferred to Week 7 — member-facing
+  display context belongs alongside Fundraiser<->Beneficiary junction build
+- Token blacklisting deferred to Thursday Security Day — backend auth
+  changes grouped together for cohesion
 
 ## Known gaps — carried forward
 
 - [ ] Secure=True on refresh cookie: pending HTTPS setup
+- [ ] Token blacklisting: logout endpoint + simplejwt blacklist app — Thursday
+- [ ] public_description on Beneficiary: Week 7
 - [ ] Duplicate manual contributions: deferred to Phase 2
 - [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
 - [ ] Per-IP rate limiting: deferred to Week 8
