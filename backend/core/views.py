@@ -5,6 +5,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 from core.throttles import LoginRateThrottle
 from core.models import Membership
 from django.contrib.auth import get_user_model
@@ -19,7 +21,7 @@ COOKIE_SETTINGS = {
     'secure': False,        # Set True in production (requires HTTPS)
     'samesite': 'Strict',   # Browser won't send cookie on cross-origin requests — closes CSRF vector
     'max_age': 7 * 24 * 60 * 60,  # 7 days, matches SIMPLE_JWT REFRESH_TOKEN_LIFETIME
-    'path': '/api/v1/auth/token/refresh/',  # Cookie only sent to the refresh endpoint — minimises exposure
+    'path': '/api/v1/auth/',  # only send cookie to auth endpoints
 }
 
 
@@ -129,3 +131,43 @@ class MembershipUpdateView(generics.UpdateAPIView):
         context = super().get_serializer_context()
         context['org_id'] = self.kwargs['org_id']
         return context
+
+
+
+class LogoutView(APIView):
+    """
+    Logout view. Reads refresh token from HttpOnly cookie,
+    blacklists it, then clears the cookie from the browser.
+    No request body needed — browser sends cookie automatically.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get(REFRESH_COOKIE_NAME)
+
+        if not refresh_token:
+            return Response(
+                {'detail': 'No active session found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # writes to simplejwt blacklist table
+        except (TokenError, InvalidToken):
+            # Token already expired or invalid — still clear the cookie
+            pass
+
+        response = Response(
+            {'detail': 'Successfully logged out.'},
+            status=status.HTTP_200_OK
+        )
+
+        # Clear the cookie from the browser
+        response.delete_cookie(
+            REFRESH_COOKIE_NAME,
+            path='/api/v1/auth/',      # must match the path the cookie was set with
+            samesite='Strict',
+        )
+
+        return response

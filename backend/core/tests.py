@@ -2,8 +2,20 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from core.models import Organization, Membership
+from django.test import override_settings
+from unittest.mock import patch
+
 
 User = get_user_model()
+
+
+@override_settings(REST_FRAMEWORK={
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '100/minute',
+        'anon': '100/minute',
+    }
+})
+
 
 
 class LoginResponseTest(TestCase):
@@ -52,8 +64,8 @@ class LoginResponseTest(TestCase):
         # SameSite=Strict closes the CSRF vector
         self.assertEqual(cookie['samesite'], 'Strict')
 
-        # Cookie must be scoped to the refresh endpoint only — not the whole site
-        self.assertEqual(cookie['path'], '/api/v1/auth/token/refresh/')
+        # Cookie scoped to all auth endpoints — covers refresh and logout
+        self.assertEqual(cookie['path'], '/api/v1/auth/')
 
     def test_refresh_endpoint_reads_cookie_and_returns_new_access_token(self):
         # Step 1 — login to get the cookie planted
@@ -75,6 +87,14 @@ class LoginResponseTest(TestCase):
 
         # Refresh token must still not appear in the JSON body
         self.assertNotIn('refresh', refresh_response.data)
+
+
+@override_settings(REST_FRAMEWORK={
+		'DEFAULT_THROTTLE_RATES': {
+				'login': '100/minute',
+				'anon': '100/minute',
+		}
+})
 
 
 class MembershipPrivilegeEscalationTest(TestCase):
@@ -113,3 +133,80 @@ class MembershipPrivilegeEscalationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.member_membership.refresh_from_db()
         self.assertEqual(self.member_membership.role, 'admin')
+
+
+
+class LogoutTest(TestCase):
+    def setUp(self):
+        self.throttle_patcher = patch(
+            'core.throttles.LoginRateThrottle.allow_request',
+            return_value=True
+        )
+        self.throttle_patcher.start()
+
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='james', password='testpass123'
+        )
+        self.org = Organization.objects.create(name='Test Org')
+        Membership.objects.create(
+            user=self.user,
+            organization=self.org,
+            role=Membership.Role.ADMIN
+        )
+
+    def tearDown(self):
+        self.throttle_patcher.stop()
+
+
+    def _login(self):
+        """Helper — logs in and returns the access token."""
+        response = self.client.post('/api/v1/auth/token/', {
+            'username': 'james',
+            'password': 'testpass123'
+        })
+        self.assertEqual(response.status_code, 200)
+        return response.data['access']
+
+    def test_logout_blacklists_refresh_token(self):
+        # Step 1 — login, cookie is planted automatically
+        access = self._login()
+
+        # Step 2 — logout
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        response = self.client.post('/api/v1/auth/logout/')
+        self.assertEqual(response.status_code, 200)
+
+        # Step 3 — attempt token refresh — must be rejected
+        refresh_response = self.client.post('/api/v1/auth/token/refresh/')
+        self.assertEqual(refresh_response.status_code, 401)
+
+    def test_logout_clears_cookie(self):
+        # Login to plant the cookie
+        access = self._login()
+
+        # Logout
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        response = self.client.post('/api/v1/auth/logout/')
+        self.assertEqual(response.status_code, 200)
+
+        # Cookie must be cleared — max-age 0 or empty value signals deletion
+        cookie = response.cookies.get('refresh_token')
+        self.assertIsNotNone(cookie)
+        self.assertEqual(cookie.value, '')
+
+    def test_logout_requires_authentication(self):
+        # Unauthenticated POST to logout must be rejected
+        response = self.client.post('/api/v1/auth/logout/')
+        self.assertEqual(response.status_code, 401)
+
+    def test_logout_without_cookie_returns_400(self):
+        # Authenticated user but no refresh cookie — e.g. cookie already expired
+        access = self._login()
+
+        # Manually clear the cookie before calling logout
+        self.client.cookies.clear()
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        response = self.client.post('/api/v1/auth/logout/')
+        self.assertEqual(response.status_code, 400)

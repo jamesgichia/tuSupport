@@ -17,6 +17,13 @@ class IDORFundraiserTest(TestCase):
     """
 
     def setUp(self):
+        # Disable throttling — login rate limiting tested separately
+        self.throttle_patcher = patch(
+            'core.throttles.LoginRateThrottle.allow_request',
+            return_value=True
+        )
+        self.throttle_patcher.start()
+
         # --- Org A setup ---
         self.org_a = Organization.objects.create(name="Org A")
         self.user_a = User.objects.create_user(username="user_a", password="pass_a")
@@ -85,7 +92,8 @@ class IDORFundraiserTest(TestCase):
                 organization=self.org_b, title="Malicious Fundraiser"
             ).exists()
         )
-
+    def tearDown(self):
+        self.throttle_patcher.stop()
 
 class LoginThrottleTest(TestCase):
     """

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 		'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
 		'corsheaders',
 		'core',
 		'leads',
@@ -105,7 +106,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),   # Short — if stolen, expires fast
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),      # Longer — used to get new access tokens
     'ROTATE_REFRESH_TOKENS': True,                    # Each refresh issues a new refresh token
-    'BLACKLIST_AFTER_ROTATION': False,                # We'll revisit blacklisting later
+    'BLACKLIST_AFTER_ROTATION': True,    # old refresh token → blacklist immediately
 }
 
 
