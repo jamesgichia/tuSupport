@@ -68,6 +68,7 @@ at 3 attempts/minute.
 | 4   | Security   | Token blacklisting; LogoutView; cookie path fix      |
 | 5   | Review     | Throttle tests; CookieTokenRefreshView gap closed    |
 
+
 ## Project structure
 
 .
