@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Fundraiser, Contribution, Beneficiary
+from .models import Fundraiser, Contribution, Beneficiary, FundraiserBeneficiary
 from decimal import Decimal
 
 class FundraiserSerializer(serializers.ModelSerializer):
@@ -99,3 +99,22 @@ class BeneficiaryAdminSerializer(serializers.ModelSerializer):
             'relationship_to_org', 'internal_notes', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+
+class FundraiserBeneficiarySerializer(serializers.ModelSerializer):
+    # Read-only nested detail — so the API consumer sees names, not just IDs
+    beneficiary_name = serializers.CharField(
+        source="beneficiary.full_name", read_only=True
+    )
+
+    class Meta:
+        model = FundraiserBeneficiary
+        fields = [
+            "id",
+            "beneficiary",        # write: accepts beneficiary ID on POST
+            "beneficiary_name",   # read: returns human-readable name
+            "notes",
+            "created_at",
+            "created_by",
+        ]
+        read_only_fields = ["id", "created_at", "created_by", "beneficiary_name"]

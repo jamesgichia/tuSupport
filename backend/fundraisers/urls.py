@@ -5,7 +5,8 @@ from .views import (
     ContributionListCreateView,
     PublishFundraiserView,
     CloseFundraiserView,
-    BeneficiaryListCreateView
+    BeneficiaryListCreateView,
+    FundraiserBeneficiaryListCreateView,
 )
 
 urlpatterns = [
@@ -35,8 +36,14 @@ urlpatterns = [
         name="contribution-list-create",
     ),
     path(
-       'organizations/<int:org_id>/beneficiaries/',
-       BeneficiaryListCreateView.as_view(),
-       name='beneficiary-list-create'
+        'organizations/<int:org_id>/beneficiaries/',
+        BeneficiaryListCreateView.as_view(),
+        name='beneficiary-list-create'
     ),
+    path(
+        "organizations/<int:org_id>/fundraisers/<int:fundraiser_pk>/beneficiaries/",
+        FundraiserBeneficiaryListCreateView.as_view(),
+        name="fundraiser-beneficiary-list",
+    ),
+
 ]

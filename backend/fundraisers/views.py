@@ -4,9 +4,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import Http404
-from .models import Fundraiser, Contribution, Beneficiary
-from .serializers import FundraiserSerializer, ContributionSerializer
-from .serializers import BeneficiaryAdminSerializer, BeneficiaryPublicSerializer
+from django.shortcuts import get_object_or_404
+from .models import Fundraiser, Contribution, Beneficiary, FundraiserBeneficiary
+from .serializers import FundraiserSerializer, ContributionSerializer, FundraiserBeneficiarySerializer, BeneficiaryAdminSerializer, BeneficiaryPublicSerializer
+from .serializers import BeneficiaryAdminSerializer, BeneficiaryPublicSerializer, FundraiserBeneficiarySerializer
 from core.models import Membership
 
 
@@ -275,3 +276,46 @@ class BeneficiaryListCreateView(generics.ListCreateAPIView):
                 "Only administrators can register beneficiaries."
             )
         serializer.save(organization=membership.organization)
+
+
+
+class FundraiserBeneficiaryListCreateView(generics.ListCreateAPIView):
+    serializer_class = FundraiserBeneficiarySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        org_id = self.kwargs["org_id"]
+        # Verify the requesting user is a member of this organization
+        membership = get_object_or_404(
+            self.request.user.membership_set,
+            organization_id=org_id,
+        )
+        fundraiser = get_object_or_404(
+            Fundraiser,
+            pk=self.kwargs["fundraiser_pk"],
+            organization=membership.organization,  # tenant check
+        )
+        return FundraiserBeneficiary.objects.filter(fundraiser=fundraiser)
+
+    def perform_create(self, serializer):
+        org_id = self.kwargs["org_id"]
+        membership = get_object_or_404(
+            self.request.user.membership_set,
+            organization_id=org_id,
+        )
+        fundraiser = get_object_or_404(
+            Fundraiser,
+            pk=self.kwargs["fundraiser_pk"],
+            organization=membership.organization,  # tenant check
+        )
+        beneficiary = get_object_or_404(
+            Beneficiary,
+            pk=serializer.validated_data["beneficiary"].pk,
+            organization=membership.organization,  # tenant check — IDOR closed
+        )
+        serializer.save(
+            fundraiser=fundraiser,
+            beneficiary=beneficiary,
+            organization=membership.organization,
+            created_by=self.request.user,
+        )

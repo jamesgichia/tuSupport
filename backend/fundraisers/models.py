@@ -139,3 +139,45 @@ class Beneficiary(TenantScopedModel):
 
     def __str__(self):
         return f"{self.display_name} ({self.organization})"
+
+
+
+class FundraiserBeneficiary(TenantScopedModel):
+    """
+    Explicit junction table linking a Fundraiser to a Beneficiary.
+    Through model — never use implicit M2M for audit-grade relationships.
+    organization is denormalized here intentionally (see decisions.md)
+    for direct tenant-scoped queries without JOIN overhead.
+    """
+
+    fundraiser = models.ForeignKey(
+        "Fundraiser",
+        on_delete=models.PROTECT,
+        related_name="beneficiary_links",
+    )
+    beneficiary = models.ForeignKey(
+        "Beneficiary",
+        on_delete=models.PROTECT,
+        related_name="fundraiser_links",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="fundraiser_beneficiary_links",
+        null=True,          # null=True because system actions may not have a user
+        blank=True,
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["fundraiser", "beneficiary"],
+                name="unique_fundraiser_beneficiary",
+            )
+        ]
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.fundraiser} → {self.beneficiary}"
