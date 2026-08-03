@@ -65,6 +65,7 @@ class CookieTokenRefreshView(TokenRefreshView):
     Refresh view. Reads refresh token from HttpOnly cookie, not request body.
     The frontend sends an empty POST — the browser attaches the cookie automatically.
     """
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get(REFRESH_COOKIE_NAME)
