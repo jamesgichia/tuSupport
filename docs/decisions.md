@@ -123,6 +123,22 @@ wiring is done (Week 5, Day 3), components use interim hardcoded
 classes — a known temporary state, not a pattern to replicate.
 
 
+## ADR-010: Explicit through model for Fundraiser↔Beneficiary M2M
+
+**Date:** Week 7, Day 1
+**Decision:** Use an explicit through model (FundraiserBeneficiary)
+rather than Django's implicit ManyToManyField.
+**Reasoning:** Implicit M2M gives the relationship but discards context
+around it — who linked it, when, and why. Audit-grade systems need that
+metadata.
+**organization denormalized intentionally** — avoids JOIN overhead in
+tenant-scoped queries; logged here so future schema auditors don't
+treat it as an accidental normalization violation.
+**status field deferred** — soft-disassociation implies a workflow
+(who can remove, what happens to past contributions) that doesn't
+exist yet. An unenforced field implies a guarantee the system doesn't give.
+
+
 ## Environment notes (non-architectural, but worth remembering)
 
 - PostgreSQL 18+ Docker images require the data volume mounted at the parent directory `/var/lib/postgresql`, not the old-style `/var/lib/postgresql/data` — this supports version-namespaced data directories for future `pg_upgrade` operations.

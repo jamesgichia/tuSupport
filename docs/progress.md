@@ -1,50 +1,70 @@
-**Last updated:** Week 6, Day 5 — Friday Review & Stabilization
+**Last updated:** Week 7, Day 1 — Backend
 
 ## Current state
 
-36 tests passing. Branch feature/beneficiary-integration merged to main.
+36 tests passing. Branch feature/fundraiser-beneficiary-m2m in progress.
+
+---
 
 ## What was shipped today
 
-- `LoginThrottleTest` — confirms `429` after 3 consecutive login attempts
-- `TokenRefreshThrottleTest` — confirms `429` after 3 consecutive refresh attempts
-- `throttle_classes = [LoginRateThrottle]` added to `CookieTokenRefreshView`
-  — this view was previously completely unthrottled, a silent security gap
-- `LoginRateThrottle` import added to `core/tests.py`
-- `core/tests.py` consolidated — removed stacked duplicate `@override_settings`
-  decorators on `LoginResponseTest`; extracted shared `THROTTLE_DISABLED` constant
-  to eliminate repeated throttle bypass dicts across test classes
+- `FundraiserBeneficiary` explicit junction model added to `fundraisers/models.py`
+  - `fundraiser` FK — `on_delete=PROTECT` (audit-grade; blocks fundraiser deletion while links exist)
+  - `beneficiary` FK — `on_delete=PROTECT` (blocks beneficiary deletion while linked to any campaign)
+  - `created_by` FK — `on_delete=PROTECT`, `null=True` (system actions may have no user)
+  - `organization` — denormalized intentionally; avoids JOIN in tenant-scoped queries (see ADR-010)
+  - `notes` — optional text; captures committee context for why beneficiary was attached
+  - `created_at` — auto-stamped audit trail
+  - `UniqueConstraint` on `(fundraiser, beneficiary)` — prevents duplicate links
+- Migration `0007_fundraiserbeneficiary` applied cleanly
+- `FundraiserBeneficiarySerializer` added to `fundraisers/serializers.py`
+  - `beneficiary` — write field (accepts ID on POST)
+  - `beneficiary_name` — read-only nested field (returns human-readable name via `source`)
+  - `created_by`, `created_at` — read-only audit fields; never client-writable
+- `FundraiserBeneficiaryListCreateView` added to `fundraisers/views.py`
+  - Membership-based tenant isolation — consistent with all existing views
+  - Dual IDOR check: fundraiser AND beneficiary both verified against same tenant before write
+  - `fundraiser` injected from URL kwargs in `perform_create()` — client cannot override
+- Nested URL registered: `organizations/<org_id>/fundraisers/<fundraiser_pk>/beneficiaries/`
+- `get_object_or_404` import added to `fundraisers/views.py` (was missing — caused 500)
 
 ## What was verified today
 
-- `test_login_throttle_returns_429_after_limit` — `429` fires on 4th attempt
-- `test_refresh_throttle_returns_429_after_limit` — `429` fires on 4th attempt
-  after a real login session (valid cookie required — fake cookie dies at 401
-  before throttle is evaluated)
-- Full suite: 36/36 passing across all apps
+- `GET /api/v1/organizations/1/fundraisers/1/beneficiaries/` — returns `[]` on empty, 200 OK
+- `POST /api/v1/organizations/1/fundraisers/1/beneficiaries/` — creates junction record,
+  returns `id`, `beneficiary`, `beneficiary_name`, `notes`, `created_at`, `created_by`
+- `GET` after POST — returns the created record correctly
+- Full suite: 36/36 passing
 
 ## Decisions made
 
-- `patch.object(LoginRateThrottle, 'THROTTLE_RATES', {'login': '3/minute'})`
-  is the correct pattern for throttle rate tests — `override_settings` on
-  `REST_FRAMEWORK` fails because DRF evaluates `throttle_classes` at class
-  definition time, not at request time; the class attribute wins regardless
-  of what `override_settings` does to the settings dict
-- `cache.clear()` in both `setUp` and `tearDown` — mandatory for throttle tests;
-  dirty cache causes counters to start mid-count from previous runs
-- `/api/v1/leads/` rate limit test deferred — endpoint confirmed as pure DB write
-  with no external side effects (no email, no SMS, no webhooks); deferral is
-  justified; revisit if leads endpoint gains external integrations
+- Explicit `through` model chosen over Django's implicit `ManyToManyField` — implicit M2M
+  gives the relationship but discards audit context (who linked it, when, why)
+- `organization` denormalized onto junction table — intentional, not a normalization error;
+  avoids JOIN overhead in tenant-scoped `get_queryset()` calls (logged in ADR-010)
+- `status` field (ACTIVE/REMOVED) deferred to Phase 2 — soft-disassociation implies a
+  workflow (who can remove, what happens to past contributions) that doesn't exist yet;
+  an unenforced field implies a guarantee the system doesn't give
+- Allocation amounts deferred to Phase 2 — harambee pot is collected first, distributed
+  by committee later; enforcing per-beneficiary allocation requires disbursement logic
+  that doesn't exist yet
+- URL pattern: nested under fundraiser (`organizations/<org_id>/fundraisers/<pk>/beneficiaries/`)
+  not flat (`/fundraiser-beneficiaries/`) — frontend always has fundraiser context when
+  managing beneficiaries; nested URL makes `fundraiser_id` implicit in path, not payload
 
-## Security finding closed this session
+## Security notes
 
-`CookieTokenRefreshView` had no `throttle_classes` defined. An attacker with
-a stolen refresh token could hammer `/api/v1/auth/token/refresh/` indefinitely
-to rotate tokens and maintain persistent access. Now closed — throttle fires
-at 3 attempts/minute.
+- Dual IDOR protection confirmed: both `fundraiser` and `beneficiary` resolved against
+  `membership.organization` before any write — attacker from Org B cannot slip in a
+  Org B beneficiary ID into Org A's fundraiser
+- **Known gap:** POST is currently open to any authenticated member — attaching a
+  beneficiary to a campaign is a committee/admin decision; permission check needed.
+  Flagged for Thursday security day.
 
-## Known gaps — carried to Week 7
+## Known gaps — carried forward
 
+- [ ] Admin-only permission on `FundraiserBeneficiaryListCreateView` POST —
+      any member can currently attach beneficiaries; Thursday security day
 - [ ] Secure=True on refresh cookie: pending HTTPS setup
 - [ ] public_description on Beneficiary: Week 7
 - [ ] Duplicate manual contributions: deferred to Phase 2
@@ -52,22 +72,24 @@ at 3 attempts/minute.
 - [ ] Per-IP rate limiting: deferred to Week 8
 - [ ] contributor FK nullable: deferred (anonymous cash contributions)
 - [ ] submitted_by audit principal: deferred to Week 8
-- [ ] Fundraiser <-> Beneficiary M2M: Week 7
 - [ ] Auth context refactor: sessionStorage pattern is brittle across tabs;
       no central auth state — flagged, not blocking
 - [ ] /api/v1/leads/ rate limit test: deferred — pure DB write, no external
       side effects; revisit if endpoint gains integrations
+- [ ] status field on FundraiserBeneficiary: deferred to Phase 2
+- [ ] allocation amounts on FundraiserBeneficiary: deferred to Phase 2
 
-## Week 6 summary
+## Week 7 summary (in progress)
 
-| Day | Concern    | Shipped                                              |
-|-----|------------|------------------------------------------------------|
-| 1   | Backend    | Beneficiary module; dual serializer; NULL constraint |
-| 2   | Frontend   | Beneficiary admin page; UniqueConstraint fix         |
-| 3   | Integration| Beneficiary list/detail/create endpoints wired       |
-| 4   | Security   | Token blacklisting; LogoutView; cookie path fix      |
-| 5   | Review     | Throttle tests; CookieTokenRefreshView gap closed    |
+| Day | Concern     | Shipped                                                        |
+|-----|-------------|----------------------------------------------------------------|
+| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL       |
+| 2   | Frontend    | —                                                              |
+| 3   | Integration | —                                                              |
+| 4   | Security    | —                                                              |
+| 5   | Review      | —                                                              |
 
+---
 
 ## Project structure
 
@@ -84,6 +106,8 @@ at 3 attempts/minute.
 │   │   ├── urls.py
 │   │   └── views.py
 │   ├── fundraisers
+│   │   ├── migrations
+│   │   │   └── 0007_fundraiserbeneficiary.py
 │   │   ├── tests
 │   │   │   ├── **init**.py
 │   │   │   ├── test_contributions.py
@@ -165,4 +189,3 @@ at 3 attempts/minute.
 ├── docker-compose.yml
 ├── LICENSE
 └── README.md
-23 directories, 71 files
