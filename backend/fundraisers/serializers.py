@@ -85,6 +85,7 @@ class BeneficiaryPublicSerializer(serializers.ModelSerializer):
         model = Beneficiary
         fields = [
             'id', 'display_name', 'category',
+            'public_description',
             'verification_status', 'created_at'
         ]
         read_only_fields = ['id', 'verification_status', 'created_at']
@@ -118,3 +119,26 @@ class FundraiserBeneficiarySerializer(serializers.ModelSerializer):
             "created_by",
         ]
         read_only_fields = ["id", "created_at", "created_by", "beneficiary_name"]
+
+
+
+class FundraiserReadSerializer(serializers.ModelSerializer):
+    beneficiaries = serializers.SerializerMethodField()
+
+    def get_beneficiaries(self, obj):
+        links = FundraiserBeneficiary.objects.filter(
+            fundraiser=obj
+        ).select_related('beneficiary')
+        return BeneficiaryPublicSerializer(
+            [link.beneficiary for link in links],
+            many=True
+        ).data
+
+    class Meta:
+        model = Fundraiser
+        fields = [
+            'id', 'title', 'description',
+            'goal_amount', 'status', 'created_at',
+            'beneficiaries'
+        ]
+        read_only_fields = fields

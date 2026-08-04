@@ -107,6 +107,11 @@ class Beneficiary(TenantScopedModel):
         choices=Category.choices,
         default=Category.OTHER
     )
+    public_description = models.TextField(
+        blank=True,
+        default='',
+        help_text="Public-facing context shown to members e.g. 'Mama Wanjiku needs support for kidney surgery'"
+    )
     verification_status = models.CharField(
         max_length=20,
         choices=VerificationStatus.choices,

@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from .models import Fundraiser, Contribution, Beneficiary, FundraiserBeneficiary
-from .serializers import FundraiserSerializer, ContributionSerializer, FundraiserBeneficiarySerializer, BeneficiaryAdminSerializer, BeneficiaryPublicSerializer
+from .serializers import FundraiserReadSerializer, FundraiserSerializer, ContributionSerializer, FundraiserBeneficiarySerializer, BeneficiaryAdminSerializer, BeneficiaryPublicSerializer
 from .serializers import BeneficiaryAdminSerializer, BeneficiaryPublicSerializer, FundraiserBeneficiarySerializer
 from core.models import Membership
 
@@ -61,7 +61,7 @@ class FundraiserListCreateView(generics.ListCreateAPIView):
 
 
 class FundraiserDetailView(generics.RetrieveAPIView):
-    serializer_class = FundraiserSerializer
+    serializer_class = FundraiserReadSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
