@@ -1,104 +1,106 @@
-**Last updated:** Week 7, Day 1 — Backend
+# tuSupport — Progress Log
+
+**Last updated:** Week 7, Day 2 — Frontend
 
 ## Current state
 
-36 tests passing. Branch feature/fundraiser-beneficiary-m2m in progress.
+36 tests passing. Branch: main. Fundraiser detail and admin manage pages shipped and verified end-to-end.
 
 ---
 
 ## What was shipped today
 
-- `FundraiserBeneficiary` explicit junction model added to `fundraisers/models.py`
-  - `fundraiser` FK — `on_delete=PROTECT` (audit-grade; blocks fundraiser deletion while links exist)
-  - `beneficiary` FK — `on_delete=PROTECT` (blocks beneficiary deletion while linked to any campaign)
-  - `created_by` FK — `on_delete=PROTECT`, `null=True` (system actions may have no user)
-  - `organization` — denormalized intentionally; avoids JOIN in tenant-scoped queries (see ADR-010)
-  - `notes` — optional text; captures committee context for why beneficiary was attached
-  - `created_at` — auto-stamped audit trail
-  - `UniqueConstraint` on `(fundraiser, beneficiary)` — prevents duplicate links
-- Migration `0007_fundraiserbeneficiary` applied cleanly
-- `FundraiserBeneficiarySerializer` added to `fundraisers/serializers.py`
-  - `beneficiary` — write field (accepts ID on POST)
-  - `beneficiary_name` — read-only nested field (returns human-readable name via `source`)
-  - `created_by`, `created_at` — read-only audit fields; never client-writable
-- `FundraiserBeneficiaryListCreateView` added to `fundraisers/views.py`
-  - Membership-based tenant isolation — consistent with all existing views
-  - Dual IDOR check: fundraiser AND beneficiary both verified against same tenant before write
-  - `fundraiser` injected from URL kwargs in `perform_create()` — client cannot override
-- Nested URL registered: `organizations/<org_id>/fundraisers/<fundraiser_pk>/beneficiaries/`
-- `get_object_or_404` import added to `fundraisers/views.py` (was missing — caused 500)
+### Backend additions
+
+- `public_description` field added to `Beneficiary` model — `TextField`, `blank=True`, `default=''`; closes Week 7 gap from Day 1 log
+- Migration `0008_beneficiary_public_description` applied cleanly
+- `public_description` added to `BeneficiaryPublicSerializer.Meta.fields`
+- `FundraiserReadSerializer` added to `fundraisers/serializers.py`
+  - `beneficiaries` via `SerializerMethodField` — traverses `FundraiserBeneficiary` junction, returns `BeneficiaryPublicSerializer` representation per linked beneficiary
+  - `select_related('beneficiary')` on junction queryset — prevents N+1 database queries
+- `FundraiserDetailView` swapped from `FundraiserSerializer` to `FundraiserReadSerializer`
+
+### Frontend additions
+
+- `dashboard/organizations/[orgId]/fundraisers/[fundraiserId]/page.tsx` — member-facing fundraiser detail page
+  - Single payload fetch; beneficiaries inline, no secondary request
+  - Progress bar, beneficiary cards (`display_name`, `category`, `public_description`, `verification_status`)
+  - Graceful fallback for missing `current_amount` (`?? '0'`) — progress bar shows 0% honestly
+  - Contribute button routes to contributions sub-page
+- `dashboard/organizations/[orgId]/fundraisers/[fundraiserId]/manage/page.tsx` — admin-only beneficiary management page
+  - Role gate reads `current_role` from sessionStorage (set by pick-org page); non-admins silently redirected to member detail page — UX gate only, backend enforces on POST
+  - `Promise.all` parallel fetch — linked beneficiaries and org beneficiary pool load simultaneously
+  - Dropdown filtered to unlinked beneficiaries only — already-linked IDs excluded client-side
+  - Attach flow with optional committee notes; POST 201 confirmed
+  - `fetchData` re-fires after successful POST — both lists refresh, attached beneficiary disappears from dropdown immediately
+  - Back navigation to member detail page
+
+---
 
 ## What was verified today
 
-- `GET /api/v1/organizations/1/fundraisers/1/beneficiaries/` — returns `[]` on empty, 200 OK
-- `POST /api/v1/organizations/1/fundraisers/1/beneficiaries/` — creates junction record,
-  returns `id`, `beneficiary`, `beneficiary_name`, `notes`, `created_at`, `created_by`
-- `GET` after POST — returns the created record correctly
+- `GET /api/v1/organizations/1/fundraisers/1/` — returns `beneficiaries` array inline, correct fields
+- Member page renders beneficiary cards from nested payload
+- `GET /api/v1/organizations/1/fundraisers/1/beneficiaries/` — returns linked beneficiaries correctly
+- `GET /api/v1/organizations/1/beneficiaries/` — returns org pool for dropdown
+- `POST /api/v1/organizations/1/fundraisers/1/beneficiaries/` — 201, list refreshes, linked count incremented correctly (1 → 2 → 3 verified)
 - Full suite: 36/36 passing
+
+---
 
 ## Decisions made
 
-- Explicit `through` model chosen over Django's implicit `ManyToManyField` — implicit M2M
-  gives the relationship but discards audit context (who linked it, when, why)
-- `organization` denormalized onto junction table — intentional, not a normalization error;
-  avoids JOIN overhead in tenant-scoped `get_queryset()` calls (logged in ADR-010)
-- `status` field (ACTIVE/REMOVED) deferred to Phase 2 — soft-disassociation implies a
-  workflow (who can remove, what happens to past contributions) that doesn't exist yet;
-  an unenforced field implies a guarantee the system doesn't give
-- Allocation amounts deferred to Phase 2 — harambee pot is collected first, distributed
-  by committee later; enforcing per-beneficiary allocation requires disbursement logic
-  that doesn't exist yet
-- URL pattern: nested under fundraiser (`organizations/<org_id>/fundraisers/<pk>/beneficiaries/`)
-  not flat (`/fundraiser-beneficiaries/`) — frontend always has fundraiser context when
-  managing beneficiaries; nested URL makes `fundraiser_id` implicit in path, not payload
+- Separate `/manage/` page over extending member page — different data contracts; admin logic stays out of public JS bundle; different role mental model (what donors see vs. committee workspace)
+- `SerializerMethodField` over direct nested serializer — M2M goes through junction table; method field traverses it cleanly without exposing junction metadata to public response
+- Read/write serializer split introduced — `FundraiserReadSerializer` for GET detail; `FundraiserSerializer` retained for POST/create; prevents `beneficiaries` field appearing on write requests
 
-## Security notes
+---
 
-- Dual IDOR protection confirmed: both `fundraiser` and `beneficiary` resolved against
-  `membership.organization` before any write — attacker from Org B cannot slip in a
-  Org B beneficiary ID into Org A's fundraiser
-- **Known gap:** POST is currently open to any authenticated member — attaching a
-  beneficiary to a campaign is a committee/admin decision; permission check needed.
-  Flagged for Thursday security day.
+## Gotchas
+
+- Role gate initially used `sessionStorage.getItem('role')` — key does not exist; correct key is `current_role`, written only after org selection on pick-org page; silent redirect fired until full login flow was completed in browser
+- Frontend API calls missing `/api/v1/` prefix on new pages — `baseURL` in `axios.ts` is bare host (`http://localhost:8000`); all pages prefix `/api/v1/` manually in each call; new pages must follow same pattern
+
+---
 
 ## Known gaps — carried forward
 
-- [ ] Admin-only permission on `FundraiserBeneficiaryListCreateView` POST —
-      any member can currently attach beneficiaries; Thursday security day
+- [ ] Admin-only permission on `FundraiserBeneficiaryListCreateView` POST — any authenticated member can currently attach beneficiaries; Thursday security day
+- [ ] `current_amount` missing from `FundraiserReadSerializer` — progress bar shows 0%; needs contribution aggregation logic
 - [ ] Secure=True on refresh cookie: pending HTTPS setup
-- [ ] public_description on Beneficiary: Week 7
 - [ ] Duplicate manual contributions: deferred to Phase 2
 - [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
 - [ ] Per-IP rate limiting: deferred to Week 8
 - [ ] contributor FK nullable: deferred (anonymous cash contributions)
 - [ ] submitted_by audit principal: deferred to Week 8
-- [ ] Auth context refactor: sessionStorage pattern is brittle across tabs;
-      no central auth state — flagged, not blocking
-- [ ] /api/v1/leads/ rate limit test: deferred — pure DB write, no external
-      side effects; revisit if endpoint gains integrations
+- [ ] Auth context refactor: sessionStorage pattern is brittle across tabs; no central auth state — flagged, not blocking
+- [ ] /api/v1/leads/ rate limit test: deferred — pure DB write, no external side effects; revisit if endpoint gains integrations
 - [ ] status field on FundraiserBeneficiary: deferred to Phase 2
 - [ ] allocation amounts on FundraiserBeneficiary: deferred to Phase 2
 
+---
+
 ## Week 7 summary (in progress)
 
-| Day | Concern     | Shipped                                                        |
-|-----|-------------|----------------------------------------------------------------|
-| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL       |
-| 2   | Frontend    | —                                                              |
-| 3   | Integration | —                                                              |
-| 4   | Security    | —                                                              |
-| 5   | Review      | —                                                              |
+| Day | Concern     | Shipped                                                                             |
+|-----|-------------|-------------------------------------------------------------------------------------|
+| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL                            |
+| 2   | Frontend    | public_description field; FundraiserReadSerializer; detail page; admin manage page |
+| 3   | Integration | —                                                                                   |
+| 4   | Security    | —                                                                                   |
+| 5   | Review      | —                                                                                   |
 
 ---
 
 ## Project structure
 
+```
 .
 ├── backend
 │   ├── core
 │   │   ├── admin.py
 │   │   ├── apps.py
-│   │   ├── **init**.py
+│   │   ├── __init__.py
 │   │   ├── models.py
 │   │   ├── serializers.py
 │   │   ├── tests.py
@@ -107,14 +109,15 @@
 │   │   └── views.py
 │   ├── fundraisers
 │   │   ├── migrations
-│   │   │   └── 0007_fundraiserbeneficiary.py
+│   │   │   ├── 0007_fundraiserbeneficiary.py
+│   │   │   └── 0008_beneficiary_public_description.py
 │   │   ├── tests
-│   │   │   ├── **init**.py
+│   │   │   ├── __init__.py
 │   │   │   ├── test_contributions.py
 │   │   │   └── test_fundraiser_state_machine.py
 │   │   ├── admin.py
 │   │   ├── apps.py
-│   │   ├── **init**.py
+│   │   ├── __init__.py
 │   │   ├── models.py
 │   │   ├── serializers.py
 │   │   ├── urls.py
@@ -122,7 +125,7 @@
 │   ├── leads
 │   │   ├── admin.py
 │   │   ├── apps.py
-│   │   ├── **init**.py
+│   │   ├── __init__.py
 │   │   ├── models.py
 │   │   ├── serializers.py
 │   │   ├── tests.py
@@ -130,11 +133,10 @@
 │   │   └── views.py
 │   ├── tusupport
 │   │   ├── asgi.py
-│   │   ├── **init**.py
+│   │   ├── __init__.py
 │   │   ├── settings.py
 │   │   ├── urls.py
 │   │   └── wsgi.py
-│   ├── cookies.txt
 │   ├── manage.py
 │   └── requirements.txt
 ├── docs
@@ -144,12 +146,6 @@
 │   ├── roadmap.md
 │   └── scope.md
 ├── frontend
-│   ├── public
-│   │   ├── file.svg
-│   │   ├── globe.svg
-│   │   ├── next.svg
-│   │   ├── vercel.svg
-│   │   └── window.svg
 │   ├── src
 │   │   ├── app
 │   │   │   ├── dashboard
@@ -159,14 +155,16 @@
 │   │   │   │           │   └── page.tsx
 │   │   │   │           └── fundraisers
 │   │   │   │               ├── [fundraiserId]
-│   │   │   │               │   └── contributions
-│   │   │   │               │       └── page.tsx
+│   │   │   │               │   ├── contributions
+│   │   │   │               │   │   └── page.tsx
+│   │   │   │               │   ├── manage
+│   │   │   │               │   │   └── page.tsx
+│   │   │   │               │   └── page.tsx
 │   │   │   │               └── page.tsx
 │   │   │   ├── login
 │   │   │   │   └── page.tsx
 │   │   │   ├── pick-org
 │   │   │   │   └── page.tsx
-│   │   │   ├── favicon.ico
 │   │   │   ├── globals.css
 │   │   │   ├── layout.tsx
 │   │   │   ├── not-found.tsx
@@ -176,16 +174,9 @@
 │   │   │   └── LandingHero.tsx
 │   │   └── lib
 │   │       └── axios.ts
-│   ├── AGENTS.md
-│   ├── CLAUDE.md
-│   ├── eslint.config.mjs
 │   ├── next.config.ts
-│   ├── next-env.d.ts
 │   ├── package.json
-│   ├── package-lock.json
-│   ├── postcss.config.mjs
-│   ├── README.md
 │   └── tsconfig.json
 ├── docker-compose.yml
-├── LICENSE
 └── README.md
+```
