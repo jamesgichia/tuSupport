@@ -32,6 +32,7 @@ export default function ContributionsPage({ params }: PageProps) {
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState('');
 	const [submitSuccess, setSubmitSuccess] = useState('');
+	const [role, setRole] = useState('');
 
 	// Form fields
 	const [amount, setAmount] = useState('');
@@ -59,6 +60,10 @@ export default function ContributionsPage({ params }: PageProps) {
 		fetchContributions();
 	}, [orgId, fundraiserId]);
 
+	useEffect(() => {
+		const r = sessionStorage.getItem('current_role') || '';
+		setRole(r);
+	}, []);
 	const handleSubmit = async () => {
 		setSubmitting(true);
 		setSubmitError('');
@@ -129,19 +134,25 @@ export default function ContributionsPage({ params }: PageProps) {
 					</div>
 
 					{/* Contributor name — for unregistered cash payers */}
-					<div>
-						<label className='block text-sm font-medium text-text-secondary mb-1'>
-							Contributor name{' '}
-							<span className='text-text-muted'>(optional)</span>
-						</label>
-						<input
-							type='text'
-							value={contributorName}
-							onChange={(e) => setContributorName(e.target.value)}
-							placeholder='e.g. John Kamau'
-							className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'
-						/>
-					</div>
+					{role === 'admin' && (
+						<div>
+							<label className='block text-sm font-medium text-text-secondary mb-1'>
+								Contributor name{' '}
+								<span className='text-text-muted'>
+									(optional)
+								</span>
+							</label>
+							<input
+								type='text'
+								value={contributorName}
+								onChange={(e) =>
+									setContributorName(e.target.value)
+								}
+								placeholder='e.g. John Kamau'
+								className='w-full border border-surface-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary'
+							/>
+						</div>
+					)}
 
 					{/* Payment method */}
 					<div>
