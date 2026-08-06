@@ -1,48 +1,52 @@
 # tuSupport — Progress Log
 
-**Last updated:** Week 7, Day 3 — Integration
+**Last updated:** Week 7, Day 4 — Security
 
 ## Current state
 
-36 tests passing. Branch: main. Contributions flow verified end-to-end.
+43 tests passing. Branch: main. Admin-only gate on FundraiserBeneficiary POST enforced and proven. current_amount live on fundraiser detail page.
 
 ---
 
 ## What was shipped today
 
-- Contributor name field hidden from non-admin users in `contributions/page.tsx`
-- Role `useEffect` added — reads `current_role` from sessionStorage on mount
+- `IsOrgAdmin` permission class — gates unsafe methods on `FundraiserBeneficiaryListCreateView` to admin role only
+- `FundraiserBeneficiaryListCreateView` updated — `IsOrgAdmin` added to `permission_classes`; inline membership lookups replaced with `get_membership_or_404()` pattern
+- 7 new permission tests — covers unauthenticated, foreign user (cross-tenant), member, and admin actors across GET and POST
+- `current_amount` added to `FundraiserReadSerializer` via `SerializerMethodField` — calculates live sum from contributions table; verified in browser (KES 18,100 / 100% funded)
 
 ---
 
 ## What was verified today
 
-- `GET /api/v1/organizations/1/fundraisers/1/contributions/` — returns list correctly
-- `POST /api/v1/organizations/1/fundraisers/1/contributions/` — 201, list refreshes
-- `ValidationError` on unpublished fundraiser surfaces via `err.response?.data?.detail`
-- Trust boundary confirmed: member `contributor_name` override ignored in `perform_create`
-- Contributor name field hidden for members, visible for admins — verified in browser
+- Unauthenticated GET/POST → 401
+- Foreign user (Org B member) GET/POST to Org A → 404 (tenant isolation holds)
+- Regular member POST → 403
+- Regular member GET → 200
+- Admin POST → 201
+- Progress bar on fundraiser detail page shows correct funded amount
 
 ---
 
 ## Decisions made
 
-- Members can record their own contributions — form intentionally open to all; backend enforces trust boundaries, not the UI
-- Contributor name field is admin-only concern — hiding it is a UX decision, not a security control; backend ignores it regardless
+- `IsOrgAdmin` raises `Http404` for non-members (cross-tenant probe prevention) and returns `False` for authenticated members without admin role (yields `403`)
+- `current_amount` derived on demand — never stored; no `status` filter since manual contributions have no payment status field (M-Pesa status tracking deferred to Phase 3)
+- `get_membership_or_404()` remains an instance method per view class — refactor to shared module-level function flagged as tech debt, deferred to Week 8 hardening
 
 ---
 
 ## Gotchas
 
-- Role `useEffect` was correct but changes weren't saved — field appeared to not work; always save before debugging
-- Full login flow must be completed before sessionStorage keys exist — `current_role` only written after org selection on pick-org page
+- `IsOrgAdmin` sketch in session used `fundraiser_pk` kwarg — actual URL uses `org_id`; always read the URL config before writing permission logic
+- `Contribution` model has no `status` field — filtering by `status='completed'` crashed at runtime; removed filter, all recorded contributions count
+- `Beneficiary` model uses `display_name` + `full_name`, not `name` — test fixtures must match actual model fields
 
 ---
 
 ## Known gaps — carried forward
 
-- [ ] Admin-only permission on `FundraiserBeneficiaryListCreateView` POST — Thursday security day
-- [ ] `current_amount` missing from `FundraiserReadSerializer` — progress bar shows 0%
+- [ ] `get_membership_or_404()` duplicated across view classes — extract to module-level helper (Week 8)
 - [ ] Secure=True on refresh cookie: pending HTTPS setup
 - [ ] Duplicate manual contributions: deferred to Phase 2
 - [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
@@ -58,13 +62,13 @@
 
 ## Week 7 summary (in progress)
 
-| Day | Concern     | Shipped                                                                             |
-|-----|-------------|-------------------------------------------------------------------------------------|
-| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL                            |
-| 2   | Frontend    | public_description field; FundraiserReadSerializer; detail page; admin manage page |
-| 3   | Integration | Contributions flow verified; contributor name field hidden from members             |
-| 4   | Security    | —                                                                                   |
-| 5   | Review      | —                                                                                   |
+| Day | Concern     | Shipped                                                                                      |
+|-----|-------------|----------------------------------------------------------------------------------------------|
+| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL                                     |
+| 2   | Frontend    | public_description field; FundraiserReadSerializer; detail page; admin manage page          |
+| 3   | Integration | Contributions flow verified; contributor name field hidden from members                      |
+| 4   | Security    | IsOrgAdmin permission class; 7 new tests; current_amount on FundraiserReadSerializer        |
+| 5   | Review      | —                                                                                            |
 
 ---
 
@@ -84,9 +88,6 @@
 │   │   ├── urls.py
 │   │   └── views.py
 │   ├── fundraisers
-│   │   ├── migrations
-│   │   │   ├── 0007_fundraiserbeneficiary.py
-│   │   │   └── 0008_beneficiary_public_description.py
 │   │   ├── tests
 │   │   │   ├── __init__.py
 │   │   │   ├── test_contributions.py

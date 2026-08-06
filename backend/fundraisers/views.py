@@ -1,6 +1,6 @@
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import Http404
@@ -9,6 +9,8 @@ from .models import Fundraiser, Contribution, Beneficiary, FundraiserBeneficiary
 from .serializers import FundraiserReadSerializer, FundraiserSerializer, ContributionSerializer, FundraiserBeneficiarySerializer, BeneficiaryAdminSerializer, BeneficiaryPublicSerializer
 from .serializers import BeneficiaryAdminSerializer, BeneficiaryPublicSerializer, FundraiserBeneficiarySerializer
 from core.models import Membership
+
+
 
 
 class FundraiserListCreateView(generics.ListCreateAPIView):
@@ -279,39 +281,66 @@ class BeneficiaryListCreateView(generics.ListCreateAPIView):
 
 
 
+class IsOrgAdmin(BasePermission):
+    """
+    Safe methods (GET, HEAD, OPTIONS): any authenticated org member passes.
+    Unsafe methods (POST, PUT, PATCH, DELETE): org admin role required.
+    Non-members get 404 — prevents cross-tenant resource existence leaking.
+    """
+    def has_permission(self, request, view):
+        # Safe methods — read access for any authenticated member
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Unsafe methods — fetch membership, check role
+        org_id = view.kwargs.get("org_id")
+        membership = request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+
+        # Non-member: 404 (not 403) — don't confirm the resource exists
+        if membership is None:
+            raise Http404
+
+        # Member but not admin: 403 — they know the resource exists, deny the action
+        return membership.role == "admin"
+
+
+
+
 class FundraiserBeneficiaryListCreateView(generics.ListCreateAPIView):
     serializer_class = FundraiserBeneficiarySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrgAdmin]  # IsOrgAdmin gates writes
+
+    def get_membership_or_404(self):
+        org_id = self.kwargs["org_id"]
+        membership = self.request.user.membership_set.filter(
+            organization_id=org_id
+        ).first()
+        if membership is None:
+            raise Http404
+        return membership
 
     def get_queryset(self):
-        org_id = self.kwargs["org_id"]
-        # Verify the requesting user is a member of this organization
-        membership = get_object_or_404(
-            self.request.user.membership_set,
-            organization_id=org_id,
-        )
+        membership = self.get_membership_or_404()
         fundraiser = get_object_or_404(
             Fundraiser,
             pk=self.kwargs["fundraiser_pk"],
-            organization=membership.organization,  # tenant check
+            organization=membership.organization,
         )
         return FundraiserBeneficiary.objects.filter(fundraiser=fundraiser)
 
     def perform_create(self, serializer):
-        org_id = self.kwargs["org_id"]
-        membership = get_object_or_404(
-            self.request.user.membership_set,
-            organization_id=org_id,
-        )
+        membership = self.get_membership_or_404()
         fundraiser = get_object_or_404(
             Fundraiser,
             pk=self.kwargs["fundraiser_pk"],
-            organization=membership.organization,  # tenant check
+            organization=membership.organization,
         )
         beneficiary = get_object_or_404(
             Beneficiary,
             pk=serializer.validated_data["beneficiary"].pk,
-            organization=membership.organization,  # tenant check — IDOR closed
+            organization=membership.organization,
         )
         serializer.save(
             fundraiser=fundraiser,

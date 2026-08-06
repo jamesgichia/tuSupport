@@ -124,6 +124,7 @@ class FundraiserBeneficiarySerializer(serializers.ModelSerializer):
 
 class FundraiserReadSerializer(serializers.ModelSerializer):
     beneficiaries = serializers.SerializerMethodField()
+    current_amount = serializers.SerializerMethodField()
 
     def get_beneficiaries(self, obj):
         links = FundraiserBeneficiary.objects.filter(
@@ -134,11 +135,17 @@ class FundraiserReadSerializer(serializers.ModelSerializer):
             many=True
         ).data
 
+    def get_current_amount(self, obj):
+        from django.db.models import Sum
+        result = obj.contributions.aggregate(total=Sum('amount'))
+        return result['total'] or Decimal('0.00')
+
     class Meta:
         model = Fundraiser
         fields = [
             'id', 'title', 'description',
             'goal_amount', 'status', 'created_at',
-            'beneficiaries'
+            'current_amount',
+            'beneficiaries',
         ]
         read_only_fields = fields

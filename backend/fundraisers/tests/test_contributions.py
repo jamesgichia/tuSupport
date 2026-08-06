@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from core.models import Organization, Membership
-from fundraisers.models import Fundraiser, Contribution
+from fundraisers.models import Fundraiser, Contribution, Beneficiary
 from core.throttles import LoginRateThrottle
 from unittest.mock import patch
 
@@ -396,3 +396,95 @@ class FundraiserCreationRoleTest(TestCase):
             'goal_amount': '10000.00',
         }, format='json')
         self.assertEqual(response.status_code, 403)
+
+
+
+class FundraiserBeneficiaryPermissionTests(TestCase):
+    def setUp(self):
+        # Org A — the target org
+        self.org = Organization.objects.create(name="Test Org A")
+
+        # Org B — the foreign org (for cross-tenant tests)
+        self.org_b = Organization.objects.create(name="Test Org B")
+
+        # Users
+        self.admin_user = User.objects.create_user(
+            username='fb_admin', password='pass123'
+        )
+        self.member_user = User.objects.create_user(
+            username='fb_member', password='pass123'
+        )
+        self.foreign_user = User.objects.create_user(
+            username='fb_foreign', password='pass123'
+        )
+
+        # Memberships
+        Membership.objects.create(
+            user=self.admin_user, organization=self.org, role='admin'
+        )
+        Membership.objects.create(
+            user=self.member_user, organization=self.org, role='member'
+        )
+        Membership.objects.create(
+            user=self.foreign_user, organization=self.org_b, role='member'
+        )
+
+        # Fundraiser in Org A
+        self.fundraiser = Fundraiser.objects.create(
+            organization=self.org,
+            title="Test Fundraiser",
+            description="For testing",
+            goal_amount=50000,
+            status='published'
+        )
+
+        # Beneficiary in Org A
+        self.beneficiary = Beneficiary.objects.create(
+						organization=self.org,
+						display_name="Test Beneficiary",
+						full_name="Test Beneficiary Full Name",
+				)
+
+        self.client = APIClient()
+        self.url = (
+            f'/api/v1/organizations/{self.org.id}'
+            f'/fundraisers/{self.fundraiser.id}/beneficiaries/'
+        )
+        self.payload = {'beneficiary': self.beneficiary.id}
+
+    # --- Case 1: Unauthenticated ---
+    def test_unauthenticated_get_returns_401(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_unauthenticated_post_returns_401(self):
+        response = self.client.post(self.url, self.payload)
+        self.assertEqual(response.status_code, 401)
+
+    # --- Case 2 & 3: Foreign user (Org B member) ---
+    def test_foreign_user_get_returns_404(self):
+        self.client.force_authenticate(user=self.foreign_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_foreign_user_post_returns_404(self):
+        self.client.force_authenticate(user=self.foreign_user)
+        response = self.client.post(self.url, self.payload)
+        self.assertEqual(response.status_code, 404)
+
+    # --- Case 4 & 5: Regular member (Org A) ---
+    def test_member_get_returns_200(self):
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_member_post_returns_403(self):
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.post(self.url, self.payload)
+        self.assertEqual(response.status_code, 403)
+
+    # --- Case 6: Admin (Org A) ---
+    def test_admin_post_returns_201(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post(self.url, self.payload)
+        self.assertEqual(response.status_code, 201)
