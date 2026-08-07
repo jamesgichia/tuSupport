@@ -1,74 +1,60 @@
 # tuSupport — Progress Log
 
-**Last updated:** Week 7, Day 4 — Security
+**Last updated:** Week 7, Day 5 — Review & Freeze
 
 ## Current state
 
-43 tests passing. Branch: main. Admin-only gate on FundraiserBeneficiary POST enforced and proven. current_amount live on fundraiser detail page.
+43 tests passing. Branch: main. Week 7 complete and frozen.
 
 ---
 
 ## What was shipped today
 
-- `IsOrgAdmin` permission class — gates unsafe methods on `FundraiserBeneficiaryListCreateView` to admin role only
-- `FundraiserBeneficiaryListCreateView` updated — `IsOrgAdmin` added to `permission_classes`; inline membership lookups replaced with `get_membership_or_404()` pattern
-- 7 new permission tests — covers unauthenticated, foreign user (cross-tenant), member, and admin actors across GET and POST
-- `current_amount` added to `FundraiserReadSerializer` via `SerializerMethodField` — calculates live sum from contributions table; verified in browser (KES 18,100 / 100% funded)
-
----
-
-## What was verified today
-
-- Unauthenticated GET/POST → 401
-- Foreign user (Org B member) GET/POST to Org A → 404 (tenant isolation holds)
-- Regular member POST → 403
-- Regular member GET → 200
-- Admin POST → 201
-- Progress bar on fundraiser detail page shows correct funded amount
+- Week 7 review: security posture audit, known gaps stress-tested
+- `cookies.txt` credential incident resolved — removed from tracking, `backend/.gitignore` created
+- Progress log updated, Week 7 closed
 
 ---
 
 ## Decisions made
 
-- `IsOrgAdmin` raises `Http404` for non-members (cross-tenant probe prevention) and returns `False` for authenticated members without admin role (yields `403`)
-- `current_amount` derived on demand — never stored; no `status` filter since manual contributions have no payment status field (M-Pesa status tracking deferred to Phase 3)
-- `get_membership_or_404()` remains an instance method per view class — refactor to shared module-level function flagged as tech debt, deferred to Week 8 hardening
+- `get_membership_or_404()` duplication is a **structural security risk**, not just cleanliness — root cause is absence of a single enforcement point; extraction to shared module is Week 8 priority, not optional cleanup
+- Accidental credential commits: dev tokens → note and move on; production credentials → rotate first, rewrite history second
 
 ---
 
 ## Gotchas
 
-- `IsOrgAdmin` sketch in session used `fundraiser_pk` kwarg — actual URL uses `org_id`; always read the URL config before writing permission logic
-- `Contribution` model has no `status` field — filtering by `status='completed'` crashed at runtime; removed filter, all recorded contributions count
-- `Beneficiary` model uses `display_name` + `full_name`, not `name` — test fixtures must match actual model fields
+- `cookies.txt` was committed in the ADR-008 commit (July 10) — curl cookie jars must be in `.gitignore` before first test session, not after
+- `git add <deleted-file>` fails if `git rm --cached` already staged the deletion — this is expected, not an error
 
 ---
 
-## Known gaps — carried forward
+## Known gaps — carried forward to Week 8
 
-- [ ] `get_membership_or_404()` duplicated across view classes — extract to module-level helper (Week 8)
-- [ ] Secure=True on refresh cookie: pending HTTPS setup
-- [ ] Duplicate manual contributions: deferred to Phase 2
-- [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
+- [ ] `get_membership_or_404()` duplicated across view classes — extract to module-level helper (Week 8 priority #1)
+- [ ] `Secure=True` on refresh cookie: pending HTTPS setup
+- [ ] `contributor` FK nullable: blocks anonymous cash contributions at model level
+- [ ] `submitted_by` audit principal field: no record of who entered a manual contribution
 - [ ] Per-IP rate limiting: deferred to Week 8
-- [ ] contributor FK nullable: deferred (anonymous cash contributions)
-- [ ] submitted_by audit principal: deferred to Week 8
 - [ ] Auth context refactor: sessionStorage pattern is brittle across tabs
-- [ ] /api/v1/leads/ rate limit test: deferred
-- [ ] status field on FundraiserBeneficiary: deferred to Phase 2
-- [ ] allocation amounts on FundraiserBeneficiary: deferred to Phase 2
+- [ ] `/api/v1/leads/` rate limit test: deferred
+- [ ] Dark mode manual toggle: CSS wired, no UI toggle yet
+- [ ] Duplicate manual contributions: deferred to Phase 2
+- [ ] `status` field on FundraiserBeneficiary: deferred to Phase 2
+- [ ] Allocation amounts on FundraiserBeneficiary: deferred to Phase 2
 
 ---
 
-## Week 7 summary (in progress)
+## Week 7 summary
 
-| Day | Concern     | Shipped                                                                                      |
-|-----|-------------|----------------------------------------------------------------------------------------------|
-| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL                                     |
-| 2   | Frontend    | public_description field; FundraiserReadSerializer; detail page; admin manage page          |
-| 3   | Integration | Contributions flow verified; contributor name field hidden from members                      |
-| 4   | Security    | IsOrgAdmin permission class; 7 new tests; current_amount on FundraiserReadSerializer        |
-| 5   | Review      | —                                                                                            |
+| Day | Concern     | Shipped                                                                                 |
+|-----|-------------|-----------------------------------------------------------------------------------------|
+| 1   | Backend     | FundraiserBeneficiary M2M; serializer; view; nested URL                                |
+| 2   | Frontend    | public_description field; FundraiserReadSerializer; detail page; admin manage page     |
+| 3   | Integration | Contributions flow verified; contributor name field hidden from members                 |
+| 4   | Security    | IsOrgAdmin permission class; 7 new tests; current_amount on FundraiserReadSerializer   |
+| 5   | Review      | Security audit; credential incident resolved; Week 7 frozen                            |
 
 ---
 
@@ -123,6 +109,12 @@
 │   ├── roadmap.md
 │   └── scope.md
 ├── frontend
+│   ├── public
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── next.svg
+│   │   ├── vercel.svg
+│   │   └── window.svg
 │   ├── src
 │   │   ├── app
 │   │   │   ├── dashboard
@@ -142,6 +134,7 @@
 │   │   │   │   └── page.tsx
 │   │   │   ├── pick-org
 │   │   │   │   └── page.tsx
+│   │   │   ├── favicon.ico
 │   │   │   ├── globals.css
 │   │   │   ├── layout.tsx
 │   │   │   ├── not-found.tsx
@@ -151,9 +144,18 @@
 │   │   │   └── LandingHero.tsx
 │   │   └── lib
 │   │       └── axios.ts
+│   ├── AGENTS.md
+│   ├── CLAUDE.md
+│   ├── eslint.config.mjs
 │   ├── next.config.ts
+│   ├── next-env.d.ts
 │   ├── package.json
+│   ├── package-lock.json
+│   ├── postcss.config.mjs
+│   ├── README.md
 │   └── tsconfig.json
 ├── docker-compose.yml
+├── LICENSE
 └── README.md
+24 directories, 72 files
 ```
